@@ -1,6 +1,7 @@
-// src/pages/QuizPage.js
+// src/pages/GosiPage.js
 import React, { useEffect, useState } from 'react';
 import SelectField from '../components/SelectField';
+import { submitAnswers } from '../api';
 
 function shuffle(array) {
     const arr = [...array];
@@ -11,19 +12,19 @@ function shuffle(array) {
     return arr;
 }
 
-function QuizPage({ questions, settings, groups = [] }) {
-    // step: setup(설정) | quiz(문제 풀이) | result(결과 보기)
+function GosiPage({ questions, settings, groups = [] }) {
+    // step: setup(시험 설정) | quiz(문제 풀이) | result(결과 보기)
     const [step, setStep] = useState('setup');
 
+    // 사용자 정보
+    const [userName, setUserName] = useState('');
+    const [userEmail, setUserEmail] = useState('');
     const [selectedGroupId, setSelectedGroupId] = useState('');
-    const [questionCount, setQuestionCount] = useState(10);
 
     const [quizQuestions, setQuizQuestions] = useState([]);
-    const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState({});
     const [score, setScore] = useState(null);
     const [resultMap, setResultMap] = useState({}); // { [id]: { correct: boolean } }
-    const [immediateFeedback, setImmediateFeedback] = useState(null); // { isCorrect, correctText, explanation }
 
     const [remainingSeconds, setRemainingSeconds] = useState(null);
     const [timerRunning, setTimerRunning] = useState(false);
@@ -50,17 +51,28 @@ function QuizPage({ questions, settings, groups = [] }) {
             ? Math.max(0, (remainingSeconds / totalSeconds) * 100)
             : 0;
 
-    const currentQuestion = quizQuestions[currentIndex] || null;
-    const isLastQuestion =
-        currentIndex === quizQuestions.length - 1;
-
-
     // ------------------------------
-    // 시작 설정
+    // 시험 시작 (설정 -> 문제 준비)
     // ------------------------------
     const handleStart = () => {
+        if (!userName.trim()) {
+            alert('이름을 입력해주세요.');
+            return;
+        }
+        if (!userEmail.trim()) {
+            alert('이메일을 입력해주세요.');
+            return;
+        }
         if (!selectedGroupId) {
             alert('문제 은행 그룹을 선택해주세요.');
+            return;
+        }
+
+        const selectedGroup = groups.find(
+            (g) => String(g.id) === String(selectedGroupId)
+        );
+        if (!selectedGroup) {
+            alert('선택한 문제 은행 그룹 정보를 찾을 수 없습니다.');
             return;
         }
 
@@ -73,15 +85,14 @@ function QuizPage({ questions, settings, groups = [] }) {
             return;
         }
 
-        const limitRaw =
-            Number(questionCount) || groupQuestions.length;
-        const limit = Math.max(
-            1,
-            Math.min(limitRaw, groupQuestions.length)
-        );
+        const limit =
+            Number(selectedGroup.questionCount) || groupQuestions.length;
 
         const shuffled = shuffle(groupQuestions);
-        const picked = shuffled.slice(0, limit);
+        const picked = shuffled.slice(
+            0,
+            Math.min(limit, shuffled.length)
+        );
 
         const prepared = picked.map((q) => {
             if (q.type === 'mc') {
@@ -99,8 +110,6 @@ function QuizPage({ questions, settings, groups = [] }) {
         setAnswers({});
         setScore(null);
         setResultMap({});
-        setCurrentIndex(0);
-        setImmediateFeedback(null);
         setStep('quiz');
 
         if (timerEnabled && totalSeconds > 0) {
@@ -113,7 +122,7 @@ function QuizPage({ questions, settings, groups = [] }) {
     };
 
     // ------------------------------
-    // 전체 채점 (정답/오답 카운트 용)
+    // 전체 채점
     // ------------------------------
     const gradeAll = () => {
         if (!quizQuestions.length) return;
@@ -125,7 +134,7 @@ function QuizPage({ questions, settings, groups = [] }) {
             const userAnswer = answers[q.id];
 
             if (userAnswer == null || userAnswer === '') {
-                return;
+                return; // 미응답은 오답 (newResult 없음)
             }
 
             if (q.type === 'mc') {
@@ -178,59 +187,70 @@ function QuizPage({ questions, settings, groups = [] }) {
     }, [timerRunning, remainingSeconds]);
 
     // ------------------------------
-    // 현재 문제 정답 확인
+    // 정답 제출 (저장)
     // ------------------------------
-    const handleCheckCurrent = () => {
-        const q = currentQuestion;
-        if (!q) return;
+    const handleGosiSubmit = async () => {
+        const summary = gradeAll();
+        if (!summary) return;
 
-        const userAnswer = answers[q.id];
+        setTimerRunning(false);
+        setStep('result');
 
-        if (userAnswer == null || userAnswer === '') {
-            alert('먼저 답을 선택/입력해주세요.');
-            return;
-        }
+        const selectedGroup = groups.find(
+            (g) => String(g.id) === String(selectedGroupId)
+        );
 
-        let isCorrect = false;
-        let correctText = '';
-        let explanation = q.explanation || '';
+        const details = quizQuestions.map((q) => {
+            const rawUser = answers[q.id];
+            let userAnswerText = '';
+            let correctAnswerText = '';
 
-        if (q.type === 'mc') {
-            const userIndex = Number(userAnswer);
-            const correctIndex = q.shuffledOptions.findIndex(
-                (o) => o.isCorrect
-            );
-            isCorrect = userIndex === correctIndex;
-            correctText =
-                q.shuffledOptions[correctIndex]?.text || '';
-        } else {
-            const user = String(userAnswer).trim().toLowerCase();
-            const right = String(q.answer).trim().toLowerCase();
-            isCorrect = user === right;
-            correctText = q.answer;
-        }
+            if (q.type === 'mc') {
+                const userIndex =
+                    rawUser != null ? Number(rawUser) : null;
+                const userOpt =
+                    userIndex != null
+                        ? q.shuffledOptions[userIndex]
+                        : null;
+                userAnswerText = userOpt ? userOpt.text : '';
 
-        setImmediateFeedback({
-            isCorrect,
-            correctText,
-            explanation,
+                const correctOpt = q.options[q.answerIndex];
+                correctAnswerText = correctOpt || '';
+            } else {
+                userAnswerText = rawUser != null ? String(rawUser) : '';
+                correctAnswerText = q.answer || '';
+            }
+
+            const isCorrect =
+                summary.newResult[q.id]?.correct === true;
+
+            return {
+                questionId: q.id,
+                questionText: q.question,
+                userAnswer: userAnswerText,
+                correctAnswer: correctAnswerText,
+                isCorrect,
+            };
         });
 
-        gradeAll(); // 상단 정답 카운트 갱신
-    };
+        const rate =
+            summary.total > 0
+                ? (summary.correct / summary.total) * 100
+                : 0;
 
-    // ------------------------------
-    // 다음 문제 / 결과로 이동
-    // ------------------------------
-    const handleNextQuestion = () => {
-        if (currentIndex < quizQuestions.length - 1) {
-            setCurrentIndex((idx) => idx + 1);
-            setImmediateFeedback(null);
-        } else {
-            gradeAll();
-            setTimerRunning(false);
-            setImmediateFeedback(null);
-            setStep('result');
+        try {
+            await submitAnswers({
+                userName,
+                userEmail,
+                groupId: selectedGroupId,
+                groupName: selectedGroup?.name || '',
+                scoreCorrect: summary.correct,
+                scoreTotal: summary.total,
+                scoreRate: rate,
+                details,
+            });
+        } catch (e) {
+            console.error('정답 제출 전송 실패', e);
         }
     };
 
@@ -250,10 +270,10 @@ function QuizPage({ questions, settings, groups = [] }) {
                 <div className="mb-4 flex items-center justify-between">
                     <div>
                         <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                            결과 요약 (퀴즈 모드)
+                            결과 요약
                         </p>
                         <p className="text-sm text-slate-500 dark:text-slate-400">
-                            간단한 퀴즈 결과입니다. 정답/오답과 해설을 확인하세요.
+                            정답 수와 각 문항별 정답/오답 상태를 확인하세요.
                         </p>
                     </div>
                     <div className="text-right">
@@ -353,8 +373,6 @@ function QuizPage({ questions, settings, groups = [] }) {
         setAnswers({});
         setScore(null);
         setResultMap({});
-        setImmediateFeedback(null);
-        setCurrentIndex(0);
         setRemainingSeconds(null);
         setTimerRunning(false);
     };
@@ -363,7 +381,7 @@ function QuizPage({ questions, settings, groups = [] }) {
     // 렌더링
     // ------------------------------
 
-    // 1) 설정 페이지
+    // 1) 시험 설정 페이지
     if (step === 'setup') {
         const sortedGroups = [...groups].sort((a, b) =>
             String(a.name).localeCompare(String(b.name))
@@ -374,10 +392,36 @@ function QuizPage({ questions, settings, groups = [] }) {
                 <div className="relative w-full overflow-hidden rounded-2xl bg-white/90 p-6 shadow-xl ring-1 ring-slate-100 dark:bg-slate-900/90 dark:ring-slate-800">
                     <div className="relative space-y-5">
                         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
-                            퀴즈 모드
+                            고시 모드
                         </h2>
 
                         <div className="space-y-4 text-sm">
+                            {/* 이름 */}
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                    이름
+                                </label>
+                                <input
+                                    type="text"
+                                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
+                                    value={userName}
+                                    onChange={(e) => setUserName(e.target.value)}
+                                />
+                            </div>
+
+                            {/* 이메일 */}
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                    이메일
+                                </label>
+                                <input
+                                    type="email"
+                                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
+                                    value={userEmail}
+                                    onChange={(e) => setUserEmail(e.target.value)}
+                                />
+                            </div>
+
                             {/* 문제 은행 그룹 */}
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -385,16 +429,9 @@ function QuizPage({ questions, settings, groups = [] }) {
                                 </label>
                                 <SelectField
                                     value={selectedGroupId}
-                                    onChange={(e) => {
-                                        const value = e.target.value;
-                                        setSelectedGroupId(value);
-                                        const g = groups.find(
-                                            (gg) => String(gg.id) === String(value)
-                                        );
-                                        if (g && g.questionCount) {
-                                            setQuestionCount(g.questionCount);
-                                        }
-                                    }}
+                                    onChange={(e) =>
+                                        setSelectedGroupId(e.target.value)
+                                    }
                                 >
                                     <option value="">선택해주세요</option>
                                     {sortedGroups.map((g) => (
@@ -403,25 +440,10 @@ function QuizPage({ questions, settings, groups = [] }) {
                                         </option>
                                     ))}
                                 </SelectField>
-                            </div>
-
-                            {/* 문제 수 */}
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                    출제 문제 수
-                                </label>
-                                <input
-                                    type="number"
-                                    min={1}
-                                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
-                                    value={questionCount}
-                                    onChange={(e) =>
-                                        setQuestionCount(e.target.value)
-                                    }
-                                />
-                                <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    선택한 그룹에서 지정한 개수만큼 랜덤으로 문제가 출제됩니다.
-                                </p>
+                                {/* <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    관리자가 생성한 문제 은행 그룹을 선택하면,
+                                    해당 그룹에서 지정된 문항 수만큼 무작위로 출제됩니다.
+                                </p> */}
                             </div>
                         </div>
 
@@ -431,7 +453,7 @@ function QuizPage({ questions, settings, groups = [] }) {
                                 onClick={handleStart}
                                 className="w-full rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0575E6]"
                             >
-                                퀴즈 시작
+                                시험 시작
                             </button>
                         </div>
                     </div>
@@ -448,8 +470,8 @@ function QuizPage({ questions, settings, groups = [] }) {
                 <div className="flex items-center justify-between text-sm">
                     <div className="font-medium text-slate-700 dark:text-slate-200">
                         {step === 'quiz'
-                            ? '퀴즈 모드 · 문제 풀이 중'
-                            : '퀴즈 모드 · 결과 확인'}
+                            ? '고시 모드 · 문제 풀이 중'
+                            : '고시 모드 · 결과 확인'}
                     </div>
                     {timerEnabled && totalSeconds > 0 && (
                         <div className="flex items-center gap-2">
@@ -485,130 +507,87 @@ function QuizPage({ questions, settings, groups = [] }) {
                 )}
             </div>
 
-            {/* 퀴즈 화면 */}
+            {/* 문제 풀이 화면 */}
             {step === 'quiz' && (
                 <section className="rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-slate-100 dark:bg-slate-900/95 dark:ring-slate-800">
-                    {quizQuestions.length > 0 && currentQuestion && (
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                                <span>
-                                    {currentIndex + 1} / {quizQuestions.length}번 문제
-                                </span>
-                                {score && (
-                                    <span className="font-semibold text-sky-600 dark:text-sky-400">
-                                        정답 {score.correct} / {score.total}
-                                    </span>
-                                )}
-                            </div>
-
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                                <div className="mb-2 flex items-center justify-between gap-2">
-                                    <h3 className="text-base font-medium text-slate-800 dark:text-slate-50">
-                                        {currentIndex + 1}. {currentQuestion.question}
-                                    </h3>
-                                    {currentQuestion.groupName && (
-                                        <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                                            {currentQuestion.groupName}
-                                        </span>
-                                    )}
-                                </div>
-
-                                {currentQuestion.type === 'mc' && (
-                                    <div className="space-y-1">
-                                        {currentQuestion.shuffledOptions.map(
-                                            (opt, i) => (
-                                                <label
-                                                    key={i}
-                                                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
-                                                >
-                                                    <input
-                                                        type="radio"
-                                                        className="h-4 w-4"
-                                                        name={`q_${currentQuestion.id}`}
-                                                        value={i}
-                                                        checked={
-                                                            String(
-                                                                answers[currentQuestion.id]
-                                                            ) === String(i)
-                                                        }
-                                                        onChange={(e) =>
-                                                            handleChangeAnswer(
-                                                                currentQuestion.id,
-                                                                e.target.value
-                                                            )
-                                                        }
-                                                    />
-                                                    <span className="text-slate-800 dark:text-slate-100">
-                                                        {i + 1}. {opt.text}
-                                                    </span>
-                                                </label>
-                                            )
-                                        )}
-                                    </div>
-                                )}
-
-                                {currentQuestion.type === 'sa' && (
-                                    <input
-                                        type="text"
-                                        className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-50"
-                                        placeholder="정답을 입력하세요"
-                                        value={answers[currentQuestion.id] || ''}
-                                        onChange={(e) =>
-                                            handleChangeAnswer(
-                                                currentQuestion.id,
-                                                e.target.value
-                                            )
-                                        }
-                                    />
-                                )}
-
-                                {immediateFeedback && (
+                    {quizQuestions.length > 0 && (
+                        <>
+                            <div className="space-y-4">
+                                {quizQuestions.map((q, idx) => (
                                     <div
-                                        className={`mt-3 rounded-md px-3 py-2 text-xs ${immediateFeedback.isCorrect
-                                                ? 'border border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/60 dark:bg-emerald-900/30 dark:text-emerald-200'
-                                                : 'border border-red-200 bg-red-50 text-red-800 dark:border-red-500/60 dark:bg-red-900/30 dark:text-red-200'
-                                            }`}
+                                        key={q.id}
+                                        className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800"
                                     >
-                                        <p className="font-semibold">
-                                            {immediateFeedback.isCorrect
-                                                ? '정답입니다!'
-                                                : '오답입니다.'}
-                                        </p>
-                                        <p className="mt-1">
-                                            정답:{' '}
-                                            <span className="font-semibold">
-                                                {immediateFeedback.correctText}
-                                            </span>
-                                        </p>
-                                        {immediateFeedback.explanation && (
-                                            <p className="mt-1">
-                                                해설:{' '}
-                                                <span className="text-slate-800 dark:text-slate-100">
-                                                    {immediateFeedback.explanation}
+                                        <div className="mb-2 flex items-center justify-between gap-2">
+                                            <h3 className="text-base font-medium text-slate-800 dark:text-slate-50">
+                                                {idx + 1}. {q.question}
+                                            </h3>
+                                            {q.groupName && (
+                                                <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                                                    {q.groupName}
                                                 </span>
-                                            </p>
+                                            )}
+                                        </div>
+
+                                        {q.type === 'mc' && (
+                                            <div className="space-y-1">
+                                                {q.shuffledOptions.map((opt, i) => (
+                                                    <label
+                                                        key={i}
+                                                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
+                                                    >
+                                                        <input
+                                                            type="radio"
+                                                            className="h-4 w-4"
+                                                            name={`q_${q.id}`}
+                                                            value={i}
+                                                            checked={
+                                                                String(answers[q.id]) ===
+                                                                String(i)
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleChangeAnswer(
+                                                                    q.id,
+                                                                    e.target.value
+                                                                )
+                                                            }
+                                                        />
+                                                        <span className="text-slate-800 dark:text-slate-100">
+                                                            {i + 1}. {opt.text}
+                                                        </span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {q.type === 'sa' && (
+                                            <input
+                                                type="text"
+                                                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-50"
+                                                placeholder="정답을 입력하세요"
+                                                value={answers[q.id] || ''}
+                                                onChange={(e) =>
+                                                    handleChangeAnswer(
+                                                        q.id,
+                                                        e.target.value
+                                                    )
+                                                }
+                                            />
                                         )}
                                     </div>
-                                )}
-
-                                <div className="mt-3 flex gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={handleCheckCurrent}
-                                        className="rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-3.5 py-2 text-xs font-semibold text-white shadow-md transition hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0575E6]"
-                                    >
-                                        정답 확인
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleNextQuestion}
-                                        className="rounded-full border border-slate-300 px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
-                                    >
-                                        {isLastQuestion ? '결과 보기' : '다음 문제'}
-                                    </button>
-                                </div>
+                                ))}
                             </div>
-                        </div>
+
+                            <div className="mt-5 flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleGosiSubmit}
+                                    className="rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0575E6]"
+                                >
+                                    정답 제출
+                                </button>
+                            </div>
+                        </>
                     )}
                 </section>
             )}
@@ -623,7 +602,7 @@ function QuizPage({ questions, settings, groups = [] }) {
                             onClick={handleGoToSetup}
                             className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
                         >
-                            다시 퀴즈 풀기
+                            다시 시험 보기
                         </button>
                     </div>
                 </section>
@@ -632,4 +611,4 @@ function QuizPage({ questions, settings, groups = [] }) {
     );
 }
 
-export default QuizPage;
+export default GosiPage;

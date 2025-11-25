@@ -1,6 +1,7 @@
 // src/App.js
 import React, { useEffect, useState } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, NavLink } from 'react-router-dom';
+import GosiPage from './pages/GosiPage';
 import QuizPage from './pages/QuizPage';
 import AdminPage from './pages/AdminPage';
 import MeditLogo from './assets/logo.svg';
@@ -9,6 +10,7 @@ import { fetchAll } from './api';
 function App() {
   const [questions, setQuestions] = useState([]);
   const [settings, setSettings] = useState({});
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // 다크 모드 상태
@@ -27,6 +29,7 @@ function App() {
         const data = await fetchAll();
         setQuestions(data.questions || []);
         setSettings(data.settings || {});
+        setGroups(data.groups || []);
       } catch (e) {
         console.error(e);
       } finally {
@@ -54,7 +57,7 @@ function App() {
       <div className="min-h-screen bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
         {/* 상단 공통 헤더 */}
         <header className="border-b border-slate-200 bg-white/80 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+          <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 gap-3">
             <div className="flex flex-col">
               <a
                 href="/"
@@ -70,8 +73,71 @@ function App() {
                 </span>
               </a>
               <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                Made by <span className="font-semibold">Oksu Kwak</span>
+                Made by{' '}
+                <span className="font-semibold">
+                  Oksu Kwak
+                </span>
               </span>
+            </div>
+
+            {/* 가운데 네비게이션 */}
+            <nav className="hidden sm:flex items-center gap-2 text-xs sm:text-sm">
+              <NavLink
+                to="/"
+                className={({ isActive }) =>
+                  [
+                    'rounded-full px-3 py-1',
+                    isActive
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                  ].join(' ')
+                }
+              >
+                고시 모드
+              </NavLink>
+              <NavLink
+                to="/quiz"
+                className={({ isActive }) =>
+                  [
+                    'rounded-full px-3 py-1',
+                    isActive
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                  ].join(' ')
+                }
+              >
+                퀴즈 모드
+              </NavLink>
+            </nav>
+
+            {/* 모바일에서 간단히 링크 묶기 */}
+            <div className="flex items-center gap-2 sm:hidden text-[11px]">
+              <NavLink
+                to="/"
+                className={({ isActive }) =>
+                  [
+                    'rounded-full px-2 py-1',
+                    isActive
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                  ].join(' ')
+                }
+              >
+                고시
+              </NavLink>
+              <NavLink
+                to="/quiz"
+                className={({ isActive }) =>
+                  [
+                    'rounded-full px-2 py-1',
+                    isActive
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                  ].join(' ')
+                }
+              >
+                퀴즈
+              </NavLink>
             </div>
 
             <button
@@ -90,9 +156,20 @@ function App() {
             <Route
               path="/"
               element={
+                <GosiPage
+                  questions={questions}
+                  settings={settings}
+                  groups={groups}
+                />
+              }
+            />
+            <Route
+              path="/quiz"
+              element={
                 <QuizPage
                   questions={questions}
                   settings={settings}
+                  groups={groups}
                 />
               }
             />
@@ -104,6 +181,8 @@ function App() {
                   setQuestions={setQuestions}
                   settings={settings}
                   setSettings={setSettings}
+                  groups={groups}
+                  setGroups={setGroups}
                 />
               }
             />

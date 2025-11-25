@@ -2,53 +2,53 @@
 import React, { useState, useEffect } from 'react';
 import {
     createQuestion,
-    updateSettings,
     deleteQuestionById,
     updateQuestion,
+    createGroup,
+    updateGroup,
+    deleteGroup,
+    fetchSubmissions,
+    deleteSubmission,
 } from '../api';
 import SelectField from '../components/SelectField';
 
 function AdminPage({
     questions,
     setQuestions,
-    settings,
-    setSettings,
+    groups = [],
+    setGroups,
 }) {
-    // 폼 상태
+    // ----------- 문제 폼 상태 ----------- //
     const [type, setType] = useState('mc');
     const [questionText, setQuestionText] = useState('');
     const [options, setOptions] = useState(['', '']);
     const [answerIndex, setAnswerIndex] = useState(0);
     const [answer, setAnswer] = useState('');
-    const [difficulty, setDifficulty] = useState('중');
+    const [questionGroupId, setQuestionGroupId] = useState('');
+    const [explanation, setExplanation] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [editingId, setEditingId] = useState(null);
 
-    // 리스트 필터
-    const [listDifficultyFilter, setListDifficultyFilter] =
-        useState('all');
-    const [listTypeFilter, setListTypeFilter] =
-        useState('all');
+    // 리스트 필터/페이지네이션
+    const [listTypeFilter, setListTypeFilter] = useState('all');
+    const [listGroupFilter, setListGroupFilter] = useState('all');
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 10;
 
-    // 설정 상태
-    const [timerEnabled, setTimerEnabled] = useState(
-        !!settings.timerEnabled
-    );
-    const [timerMinutes, setTimerMinutes] = useState(
-        settings.timerSeconds
-            ? Math.round(settings.timerSeconds / 60)
-            : 10
-    );
-    const [gradingMode, setGradingMode] = useState(
-        settings.gradingMode || 'batch'
-    );
-    const [showCorrectOnWrong, setShowCorrectOnWrong] = useState(
-        settings.showCorrectOnWrong !== undefined
-            ? !!settings.showCorrectOnWrong
-            : true
-    );
-    const [settingsSaving, setSettingsSaving] = useState(false);
+    // ✅ 문제 체크 삭제 상태
+    const [selectedQuestionIds, setSelectedQuestionIds] = useState([]);
+
+    // 그룹 관리
+    const [groupName, setGroupName] = useState('');
+    const [groupQuestionCount, setGroupQuestionCount] = useState('10');
+    const [editingGroupId, setEditingGroupId] = useState(null);
+    const [groupSaving, setGroupSaving] = useState(false);
+
+    // 제출된 정답
+    const [submissions, setSubmissions] = useState([]);
+    const [submissionsLoading, setSubmissionsLoading] = useState(false);
+    const [selectedSubmission, setSelectedSubmission] = useState(null);
 
     const [infoMessage, setInfoMessage] = useState('');
 
@@ -58,13 +58,31 @@ function AdminPage({
         return () => clearTimeout(id);
     }, [infoMessage]);
 
+    // 제출된 정답 로드
+    useEffect(() => {
+        const load = async () => {
+            try {
+                setSubmissionsLoading(true);
+                const data = await fetchSubmissions();
+                setSubmissions(data.submissions || []);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setSubmissionsLoading(false);
+            }
+        };
+        load();
+    }, []);
+
+    // ------------------- 공용 유틸 ------------------- //
     const resetForm = () => {
         setType('mc');
         setQuestionText('');
         setOptions(['', '']);
         setAnswerIndex(0);
         setAnswer('');
-        setDifficulty('중');
+        setQuestionGroupId('');
+        setExplanation('');
         setError('');
         setEditingId(null);
     };
@@ -77,16 +95,14 @@ function AdminPage({
         });
     };
 
-    const handleAddOption = () =>
-        setOptions((prev) => [...prev, '']);
+    const handleAddOption = () => setOptions((prev) => [...prev, '']);
 
     const handleRemoveOption = (index) => {
         setOptions((prev) => prev.filter((_, i) => i !== index));
-        if (answerIndex >= options.length - 1)
-            setAnswerIndex(0);
+        if (answerIndex >= options.length - 1) setAnswerIndex(0);
     };
 
-    // 문제 저장 (추가/수정)
+    // ----------- 문제 저장 (추가/수정) ----------- //
     const handleSubmitQuestion = async (e) => {
         e.preventDefault();
         setError('');
@@ -95,7 +111,12 @@ function AdminPage({
             setError('문제를 입력해주세요.');
             return;
         }
+        if (!questionGroupId) {
+            setError('문제 은행 그룹을 선택해주세요.');
+            return;
+        }
 
+        const group = groups.find((g) => String(g.id) === String(questionGroupId));
         let payload;
 
         if (type === 'mc') {
@@ -111,7 +132,9 @@ function AdminPage({
                 question: questionText.trim(),
                 options: cleaned,
                 answerIndex,
-                difficulty,
+                groupId: questionGroupId,
+                groupName: group?.name || '',
+                explanation: explanation.trim(),
             };
         } else {
             if (!answer.trim()) {
@@ -122,7 +145,9 @@ function AdminPage({
                 type: 'sa',
                 question: questionText.trim(),
                 answer: answer.trim(),
-                difficulty,
+                groupId: questionGroupId,
+                groupName: group?.name || '',
+                explanation: explanation.trim(),
             };
         }
 
@@ -172,11 +197,11 @@ function AdminPage({
         setEditingId(q.id);
         setType(q.type);
         setQuestionText(q.question);
-        setDifficulty(q.difficulty || '중');
-
+        setQuestionGroupId(q.groupId || '');
+        setExplanation(q.explanation || '');
         if (q.type === 'mc') {
             setOptions(q.options || []);
-            setAnswerIndex(q.answerIndex || 0);
+            setAnswerIndex(q.answerIndex ?? 0);
             setAnswer('');
         } else {
             setOptions(['', '']);
@@ -197,6 +222,7 @@ function AdminPage({
             if (editingId === id) {
                 resetForm();
             }
+            setSelectedQuestionIds((prev) => prev.filter((x) => x !== id));
             setInfoMessage('문제가 삭제되었습니다.');
         } catch (err) {
             console.error(err);
@@ -204,48 +230,254 @@ function AdminPage({
         }
     };
 
-    // 설정 저장
-    const handleSaveSettings = async () => {
-        const ok = window.confirm('설정을 저장할까요?');
-        if (!ok) return;
+    // ✅ 문제 체크박스 토글
+    const toggleSelectQuestion = (id) => {
+        setSelectedQuestionIds((prev) =>
+            prev.includes(id)
+                ? prev.filter((x) => x !== id)
+                : [...prev, id]
+        );
+    };
+
+    // ----------- 그룹 관리 ----------- //
+    const resetGroupForm = () => {
+        setGroupName('');
+        setGroupQuestionCount('10');
+        setEditingGroupId(null);
+    };
+
+    const handleSubmitGroup = async (e) => {
+        e.preventDefault();
+        if (!groupName.trim()) {
+            alert('그룹 이름을 입력해주세요.');
+            return;
+        }
+        const count = Number(groupQuestionCount) || 0;
+        if (count <= 0) {
+            alert('출제 문제 수는 1 이상이어야 합니다.');
+            return;
+        }
 
         try {
-            setSettingsSaving(true);
-            const seconds = Number(timerMinutes) * 60;
-
-            const body = {
-                timerEnabled,
-                timerSeconds: seconds,
-                gradingMode,
-                showCorrectOnWrong,
-            };
-
-            await updateSettings(body);
-            setSettings({ ...settings, ...body });
-            setInfoMessage('설정이 저장되었습니다.');
-        } catch (err) {
-            console.error(err);
-            alert('설정 저장 중 오류가 발생했습니다.');
+            setGroupSaving(true);
+            if (editingGroupId) {
+                const res = await updateGroup({
+                    id: editingGroupId,
+                    name: groupName.trim(),
+                    questionCount: count,
+                });
+                const updated = res.group || {
+                    id: editingGroupId,
+                    name: groupName.trim(),
+                    questionCount: count,
+                };
+                setGroups &&
+                    setGroups(
+                        groups.map((g) =>
+                            g.id === editingGroupId ? updated : g
+                        )
+                    );
+            } else {
+                const res = await createGroup({
+                    name: groupName.trim(),
+                    questionCount: count,
+                });
+                const newGroup = res.group || {
+                    id: res.id,
+                    name: groupName.trim(),
+                    questionCount: count,
+                };
+                setGroups && setGroups([...(groups || []), newGroup]);
+            }
+            resetGroupForm();
+            setInfoMessage('그룹 설정이 저장되었습니다.');
+        } catch (e) {
+            console.error(e);
+            alert('그룹 저장 중 오류가 발생했습니다.');
         } finally {
-            setSettingsSaving(false);
+            setGroupSaving(false);
         }
     };
 
+    const handleEditGroup = (g) => {
+        setEditingGroupId(g.id);
+        setGroupName(g.name);
+        setGroupQuestionCount(String(g.questionCount || 10));
+    };
+
+    const handleDeleteGroupClick = async (id) => {
+        const ok = window.confirm(
+            '이 그룹을 삭제하려면, 먼저 이 그룹에 속한 문제를 모두 삭제하거나 다른 그룹으로 옮겨야 합니다.\n삭제를 계속할까요?'
+        );
+        if (!ok) return;
+
+        try {
+            const res = await deleteGroup(id); // Apps Script 응답 JSON
+
+            if (res.status === 'error') {
+                if (res.code === 'GROUP_HAS_QUESTIONS') {
+                    alert(
+                        '이 그룹에 속한 문제가 있어서 삭제할 수 없습니다.\n문제 목록에서 해당 그룹 문제를 먼저 정리해주세요.'
+                    );
+                } else {
+                    alert('그룹 삭제 중 오류가 발생했습니다.\n' + (res.message || '알 수 없는 오류'));
+                }
+                return;
+            }
+
+            // 성공적으로 삭제된 경우에만 state 업데이트
+            setGroups && setGroups(groups.filter((g) => g.id !== id));
+        } catch (e) {
+            console.error(e);
+            alert('그룹 삭제 중 오류가 발생했습니다.');
+        }
+    };
+
+
+    // ----------- 제출된 정답 관리 ----------- //
+    const handleDeleteSubmissionClick = async (id) => {
+        const ok = window.confirm('이 정답 기록을 삭제할까요?');
+        if (!ok) return;
+        try {
+            await deleteSubmission(id);
+            setSubmissions(submissions.filter((s) => s.id !== id));
+            if (selectedSubmission?.id === id) {
+                setSelectedSubmission(null);
+            }
+        } catch (e) {
+            console.error(e);
+            alert('삭제 중 오류가 발생했습니다.');
+        }
+    };
+
+    const handleExportCsv = () => {
+        if (!submissions.length) {
+            alert('내보낼 데이터가 없습니다.');
+            return;
+        }
+        const header = [
+            'id',
+            'timestamp',
+            'userName',
+            'userEmail',
+            'groupName',
+            'scoreCorrect',
+            'scoreTotal',
+            'scoreRate',
+        ];
+        const lines = [
+            header.join(','),
+            ...submissions.map((s) =>
+                [
+                    s.id,
+                    s.timestamp,
+                    `"${s.userName || ''}"`,
+                    `"${s.userEmail || ''}"`,
+                    `"${s.groupName || ''}"`,
+                    s.scoreCorrect,
+                    s.scoreTotal,
+                    s.scoreRate,
+                ].join(',')
+            ),
+        ];
+        const blob = new Blob([lines.join('\n')], {
+            type: 'text/csv;charset=utf-8;',
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'submissions.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    // ----------- 문제 목록 필터/페이지네이션 ----------- //
+    const sortedGroups = [...(groups || [])].sort((a, b) =>
+        String(a.name).localeCompare(String(b.name))
+    );
+
     const filteredQuestions = questions.filter((q) => {
-        const diff = q.difficulty || '중';
         const typeMatch =
             listTypeFilter === 'all' || q.type === listTypeFilter;
-        const diffMatch =
-            listDifficultyFilter === 'all' ||
-            diff === listDifficultyFilter;
-        return typeMatch && diffMatch;
+        const groupMatch =
+            listGroupFilter === 'all' ||
+            String(q.groupId) === String(listGroupFilter);
+        return typeMatch && groupMatch;
     });
+
+    const totalPages = Math.max(
+        1,
+        Math.ceil(filteredQuestions.length / PAGE_SIZE)
+    );
+    const currentPage = Math.min(page, totalPages);
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    const pagedQuestions = filteredQuestions.slice(
+        startIndex,
+        startIndex + PAGE_SIZE
+    );
 
     const filteredCount = filteredQuestions.length;
 
+    const allFilteredSelected =
+        filteredQuestions.length > 0 &&
+        filteredQuestions.every((q) =>
+            selectedQuestionIds.includes(q.id)
+        );
+
+    const handleToggleSelectAll = () => {
+        if (allFilteredSelected) {
+            // 필터된 것들만 선택 해제
+            setSelectedQuestionIds((prev) =>
+                prev.filter(
+                    (id) => !filteredQuestions.some((q) => q.id === id)
+                )
+            );
+        } else {
+            const idsToAdd = filteredQuestions.map((q) => q.id);
+            setSelectedQuestionIds((prev) =>
+                Array.from(new Set([...prev, ...idsToAdd]))
+            );
+        }
+    };
+
+    // ✅ 선택한 문제 일괄 삭제
+    const handleBulkDelete = async () => {
+        if (selectedQuestionIds.length === 0) {
+            alert('삭제할 문제를 선택해주세요.');
+            return;
+        }
+        const ok = window.confirm(
+            `선택한 ${selectedQuestionIds.length}개의 문제를 삭제할까요?`
+        );
+        if (!ok) return;
+
+        try {
+            for (const id of selectedQuestionIds) {
+                await deleteQuestionById(id);
+            }
+
+            setQuestions(
+                questions.filter(
+                    (q) => !selectedQuestionIds.includes(q.id)
+                )
+            );
+
+            if (editingId && selectedQuestionIds.includes(editingId)) {
+                resetForm();
+            }
+
+            setSelectedQuestionIds([]);
+            setInfoMessage('선택한 문제가 삭제되었습니다.');
+        } catch (err) {
+            console.error(err);
+            alert('선택 삭제 중 오류가 발생했습니다.');
+        }
+    };
+
+    // ----------- 렌더 ----------- //
     return (
         <div className="mx-auto flex w-full max-w-6xl flex-col space-y-5 text-[15px] md:text-base">
-            {/* 상단 헤더 카드 (로고는 App에서) */}
+            {/* 상단 헤더 */}
             <header className="overflow-hidden rounded-2xl bg-white/95 p-5 shadow-xl ring-1 ring-slate-100 dark:bg-slate-900/95 dark:ring-slate-800">
                 <div className="relative flex items-center justify-between gap-2">
                     <div className="space-y-1">
@@ -253,418 +485,536 @@ function AdminPage({
                             관리자 페이지
                         </h1>
                         <p className="text-sm text-slate-500 dark:text-slate-400">
-                            문제 관리 및 시험 전체 설정을 변경할 수 있습니다.
+                            문제 은행 그룹, 문제 등록, 문제 목록, 제출된 정답을 관리합니다.
                         </p>
                     </div>
                 </div>
             </header>
 
-            <div className="grid gap-6 md:grid-cols-[1.4fr,0.9fr]">
-                {/* 문제 관리 섹션 */}
-                <section className="rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-slate-100 dark:bg-slate-900/95 dark:ring-slate-800">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-50">
-                            문제 관리
-                        </h2>
+            {/* 메시지 */}
+            {infoMessage && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 shadow-sm dark:border-emerald-500/60 dark:bg-emerald-900/30 dark:text-emerald-100">
+                    {infoMessage}
+                </div>
+            )}
 
-                        {editingId && (
-                            <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-medium text-amber-800 dark:border-amber-500/60 dark:bg-amber-900/30 dark:text-amber-200">
-                                편집 모드 · 수정 후 &quot;문제 수정&quot; 버튼을 눌러주세요
-                            </span>
-                        )}
+            {/* 카드 1: 문제 은행 그룹 관리 */}
+            <section className="rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-slate-100 dark:bg-slate-900/95 dark:ring-slate-800">
+                <h2 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-50">
+                    문제 은행 그룹
+                </h2>
+
+                {/* 그룹 폼 */}
+                <form onSubmit={handleSubmitGroup} className="space-y-3 text-sm">
+                    <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                            그룹 이름
+                        </label>
+                        <input
+                            type="text"
+                            className="w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
+                            value={groupName}
+                            onChange={(e) => setGroupName(e.target.value)}
+                        />
                     </div>
+                    <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                            출제 문제 수
+                        </label>
+                        <input
+                            type="number"
+                            min={1}
+                            className="w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
+                            value={groupQuestionCount}
+                            onChange={(e) => setGroupQuestionCount(e.target.value)}
+                        />
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            type="submit"
+                            disabled={groupSaving}
+                            className="rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0575E6]"
+                        >
+                            {editingGroupId ? '그룹 수정' : '그룹 추가'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={resetGroupForm}
+                            className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+                        >
+                            초기화
+                        </button>
+                    </div>
+                </form>
 
-                    {infoMessage && (
-                        <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 shadow-sm dark:border-emerald-500/60 dark:bg-emerald-900/30 dark:text-emerald-100">
-                            {infoMessage}
+                {/* 그룹 리스트 */}
+                <div className="mt-4 h-px w-full bg-slate-200 dark:bg-slate-800" />
+                <div className="mt-3 space-y-2 text-sm">
+                    {sortedGroups.map((g) => (
+                        <div
+                            key={g.id}
+                            className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800"
+                        >
+                            <div className="text-sm text-slate-800 dark:text-slate-100">
+                                <span className="font-semibold">{g.name}</span>{' '}
+                                <span className="text-xs text-slate-500 dark:text-slate-400">
+                                    ({g.questionCount}문항 출제)
+                                </span>
+                            </div>
+                            <div className="flex gap-1">
+                                <button
+                                    type="button"
+                                    className="rounded-full border border-slate-300 px-2 py-0.5 text-[11px] sm:text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+                                    onClick={() => handleEditGroup(g)}
+                                >
+                                    수정
+                                </button>
+                                <button
+                                    type="button"
+                                    className="rounded-full border border-red-300 px-2 py-0.5 text-[11px] sm:text-xs text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-900/30"
+                                    onClick={() => handleDeleteGroupClick(g.id)}
+                                >
+                                    삭제
+                                </button>
+                            </div>
                         </div>
+                    ))}
+                    {!sortedGroups.length && (
+                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                            아직 등록된 그룹이 없습니다.
+                        </p>
                     )}
+                </div>
+            </section>
 
-                    {/* 입력 폼 */}
-                    <form
-                        onSubmit={handleSubmitQuestion}
-                        className="space-y-3 text-sm"
-                    >
-                        <div className="grid gap-3 md:grid-cols-3">
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                                    유형
-                                </label>
-                                <SelectField
-                                    value={type}
-                                    onChange={(e) => setType(e.target.value)}
-                                >
-                                    <option value="mc">객관식</option>
-                                    <option value="sa">주관식</option>
-                                </SelectField>
-                            </div>
+            {/* 카드 2: 문제 등록 / 수정 */}
+            <section className="rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-slate-100 dark:bg-slate-900/95 dark:ring-slate-800">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                    <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-50">
+                        문제 등록 / 수정
+                    </h2>
+                    {editingId && (
+                        <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-medium text-amber-800 dark:border-amber-500/60 dark:bg-amber-900/30 dark:text-amber-200">
+                            편집 모드 · 수정 후 "문제 수정" 버튼을 눌러주세요
+                        </span>
+                    )}
+                </div>
 
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                                    난이도
-                                </label>
-                                <SelectField
-                                    value={difficulty}
-                                    onChange={(e) =>
-                                        setDifficulty(e.target.value)
-                                    }
-                                >
-                                    <option value="상">상</option>
-                                    <option value="중">중</option>
-                                    <option value="하">하</option>
-                                </SelectField>
-                            </div>
-
+                <form onSubmit={handleSubmitQuestion} className="space-y-3 text-sm">
+                    {/* 🔄 UX: 문제 은행 그룹 → 유형 순서 */}
+                    <div className="grid gap-3 md:grid-cols-3">
+                        <div className="space-y-1 md:col-span-2">
+                            <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                                문제 은행 그룹
+                            </label>
+                            <SelectField
+                                value={questionGroupId}
+                                onChange={(e) => setQuestionGroupId(e.target.value)}
+                            >
+                                <option value="">그룹 선택</option>
+                                {sortedGroups.map((g) => (
+                                    <option key={g.id} value={g.id}>
+                                        {g.name} ({g.questionCount}문항)
+                                    </option>
+                                ))}
+                            </SelectField>
                         </div>
 
                         <div className="space-y-1">
                             <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                                문제
+                                유형
                             </label>
-                            <textarea
-                                className="w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
-                                rows={3}
-                                value={questionText}
-                                onChange={(e) =>
-                                    setQuestionText(e.target.value)
-                                }
-                            />
-                        </div>
-
-                        {type === 'mc' && (
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                                    보기 + 정답
-                                </label>
-                                <div className="space-y-1">
-                                    {options.map((opt, i) => (
-                                        <div
-                                            key={i}
-                                            className="flex items-center gap-2 text-xs md:text-sm"
-                                        >
-                                            <input
-                                                type="radio"
-                                                name="correctOption"
-                                                className="h-4 w-4"
-                                                checked={answerIndex === i}
-                                                onChange={() =>
-                                                    setAnswerIndex(i)
-                                                }
-                                            />
-                                            <input
-                                                type="text"
-                                                className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
-                                                placeholder={`보기 ${i + 1}`}
-                                                value={opt}
-                                                onChange={(e) =>
-                                                    handleOptionChange(
-                                                        i,
-                                                        e.target.value
-                                                    )
-                                                }
-                                            />
-                                            {options.length > 2 && (
-                                                <button
-                                                    type="button"
-                                                    className="rounded-full border border-slate-300 px-2 py-1 text-[11px] text-slate-600 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-                                                    onClick={() =>
-                                                        handleRemoveOption(i)
-                                                    }
-                                                >
-                                                    삭제
-                                                </button>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                                <button
-                                    type="button"
-                                    className="mt-1 rounded-full border border-dashed border-slate-400 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-                                    onClick={handleAddOption}
-                                >
-                                    + 보기 추가
-                                </button>
-                            </div>
-                        )}
-
-                        {type === 'sa' && (
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                                    정답 (주관식)
-                                </label>
-                                <input
-                                    type="text"
-                                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
-                                    value={answer}
-                                    onChange={(e) =>
-                                        setAnswer(e.target.value)
-                                    }
-                                />
-                            </div>
-                        )}
-
-                        {error && (
-                            <p className="text-xs text-red-500">{error}</p>
-                        )}
-
-                        <div className="flex flex-wrap gap-2 pt-1">
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0575E6]"
+                            <SelectField
+                                value={type}
+                                onChange={(e) => setType(e.target.value)}
                             >
-                                {saving
-                                    ? '저장 중...'
-                                    : editingId
-                                        ? '문제 수정'
-                                        : '문제 추가'}
-                            </button>
+                                <option value="mc">객관식</option>
+                                <option value="sa">주관식</option>
+                            </SelectField>
+                        </div>
+                    </div>
+
+                    <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                            문제
+                        </label>
+                        <textarea
+                            className="w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
+                            rows={3}
+                            value={questionText}
+                            onChange={(e) => setQuestionText(e.target.value)}
+                        />
+                    </div>
+
+                    {type === 'mc' && (
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                                보기 + 정답
+                            </label>
+                            <div className="space-y-1">
+                                {options.map((opt, i) => (
+                                    <div
+                                        key={i}
+                                        className="flex items-center gap-2 text-xs md:text-sm"
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="correctOption"
+                                            className="h-4 w-4"
+                                            checked={answerIndex === i}
+                                            onChange={() => setAnswerIndex(i)}
+                                        />
+                                        <input
+                                            type="text"
+                                            className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
+                                            placeholder={`보기 ${i + 1}`}
+                                            value={opt}
+                                            onChange={(e) => handleOptionChange(i, e.target.value)}
+                                        />
+                                        {options.length > 2 && (
+                                            <button
+                                                type="button"
+                                                className="rounded-full border border-slate-300 px-2 py-1 text-[11px] text-slate-600 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                                                onClick={() => handleRemoveOption(i)}
+                                            >
+                                                삭제
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
                             <button
                                 type="button"
-                                className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
-                                onClick={resetForm}
+                                className="mt-1 rounded-full border border-dashed border-slate-400 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                                onClick={handleAddOption}
                             >
-                                초기화
+                                + 보기 추가
                             </button>
                         </div>
-                    </form>
+                    )}
 
-                    {/* 문제 목록 구분선 */}
-                    <div className="mt-4 h-px w-full bg-slate-200 dark:bg-slate-800" />
-                    {/* 상단 타이틀 + 필터 */}
-                    <div className="mt-3 grid gap-3 md:grid-cols-2 md:items-center">
-                        {/* 제목 영역 */}
-                        <h3 className="text-sm md:text-base font-semibold text-slate-700 dark:text-slate-50">
+                    {type === 'sa' && (
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                                정답 (주관식)
+                            </label>
+                            <input
+                                type="text"
+                                className="w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
+                                value={answer}
+                                onChange={(e) => setAnswer(e.target.value)}
+                            />
+                        </div>
+                    )}
+
+                    {/* 해설 */}
+                    <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                            해설 (선택)
+                        </label>
+                        <textarea
+                            rows={2}
+                            className="w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
+                            placeholder="문제에 대한 해설을 입력하세요."
+                            value={explanation}
+                            onChange={(e) => setExplanation(e.target.value)}
+                        />
+                    </div>
+
+                    {error && <p className="text-xs text-red-500">{error}</p>}
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                            type="submit"
+                            disabled={saving}
+                            className="rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0575E6]"
+                        >
+                            {saving
+                                ? '저장 중...'
+                                : editingId
+                                    ? '문제 수정'
+                                    : '문제 추가'}
+                        </button>
+                        <button
+                            type="button"
+                            className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+                            onClick={resetForm}
+                        >
+                            초기화
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+
+            {/* 카드 2: 문제 목록 */}
+            <section className="rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-slate-100 dark:bg-slate-900/95 dark:ring-slate-800">
+                <div className="mb-3 space-y-2">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <h2 className="text-sm md:text-base font-semibold text-slate-800 dark:text-slate-50">
                             문제 목록{' '}
                             <span className="text-xs md:text-sm font-normal text-slate-500 dark:text-slate-400">
                                 (현재 필터 기준 {filteredCount}개)
                             </span>
-                        </h3>
+                        </h2>
 
-                        {/* 필터 영역 */}
-                        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 text-sm">
-                            <div className="w-full">
-                                <SelectField
-                                    className="w-full text-sm md:text-base"
-                                    value={listTypeFilter}
-                                    onChange={(e) => setListTypeFilter(e.target.value)}
-                                >
-                                    <option value="all">전체 유형</option>
-                                    <option value="mc">객관식</option>
-                                    <option value="sa">주관식</option>
-                                </SelectField>
-                            </div>
-
-                            <div className="w-full">
-                                <SelectField
-                                    className="w-full text-sm md:text-base"
-                                    value={listDifficultyFilter}
-                                    onChange={(e) =>
-                                        setListDifficultyFilter(e.target.value)
-                                    }
-                                >
-                                    <option value="all">전체 난이도</option>
-                                    <option value="상">상</option>
-                                    <option value="중">중</option>
-                                    <option value="하">하</option>
-                                </SelectField>
-                            </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm">
+                            <label className="flex items-center gap-1 text-slate-600 dark:text-slate-300">
+                                <input
+                                    type="checkbox"
+                                    className="h-4 w-4"
+                                    checked={allFilteredSelected}
+                                    onChange={handleToggleSelectAll}
+                                />
+                                <span>현재 목록 전체 선택</span>
+                            </label>
+                            <button
+                                type="button"
+                                onClick={handleBulkDelete}
+                                className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-900/30"
+                            >
+                                선택 삭제
+                            </button>
                         </div>
                     </div>
 
+                    {/* 필터 */}
+                    <div className="grid gap-3 md:grid-cols-3">
+                        <div className="space-y-1 md:col-span-2">
+                            <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                                문제 은행 그룹
+                            </label>
 
-
-                    {/* 문제 목록 리스트 */}
-                    <div className="mt-2 max-h-60 space-y-2 overflow-y-auto text-sm">
-                        {filteredQuestions.map((q) => (
-                            <div
-                                key={q.id}
-                                className="rounded-md border border-slate-200 bg-slate-50 p-2 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800"
+                            <SelectField
+                                value={listGroupFilter}
+                                onChange={(e) => setListGroupFilter(e.target.value)}
                             >
-                                <div className="mb-1 flex items-center justify-between">
+                                <option value="all">전체 그룹</option>
+                                {sortedGroups.map((g) => (
+                                    <option key={g.id} value={g.id}>
+                                        {g.name}
+                                    </option>
+                                ))}
+                            </SelectField>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                                유형
+                            </label>
+
+
+                            <SelectField
+                                value={listTypeFilter}
+                                onChange={(e) => setListTypeFilter(e.target.value)}
+                            >
+                                <option value="all">전체 유형</option>
+                                <option value="mc">객관식</option>
+                                <option value="sa">주관식</option>
+                            </SelectField>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 문제 목록 리스트 */}
+                <div className="mt-2 max-h-72 space-y-2 overflow-y-auto text-sm">
+                    {pagedQuestions.map((q) => (
+                        <div
+                            key={q.id}
+                            className="rounded-md border border-slate-200 bg-slate-50 p-2 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800"
+                        >
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={selectedQuestionIds.includes(q.id)}
+                                        onChange={() => toggleSelectQuestion(q.id)}
+                                    />
                                     <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-[11px] sm:text-xs text-slate-700 dark:bg-slate-700 dark:text-slate-100">
                                         <span className="font-semibold">
                                             {q.type === 'mc' ? '객관식' : '주관식'}
                                         </span>
-                                        <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
-                                        <span>난이도 {q.difficulty || '중'}</span>
+                                        {q.groupName && (
+                                            <>
+                                                <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+                                                <span>{q.groupName}</span>
+                                            </>
+                                        )}
                                     </span>
+                                </div>
+                                <div className="flex gap-1">
+                                    <button
+                                        type="button"
+                                        className="rounded-full border border-slate-300 px-2 py-0.5 text-[11px] sm:text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+                                        onClick={() => handleEditClick(q)}
+                                    >
+                                        편집
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="rounded-full border border-red-300 px-2 py-0.5 text-[11px] sm:text-xs text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-900/30"
+                                        onClick={() => handleDeleteClick(q.id)}
+                                    >
+                                        삭제
+                                    </button>
+                                </div>
+                            </div>
+                            <p className="line-clamp-2 text-sm text-slate-800 dark:text-slate-100">
+                                {q.question}
+                            </p>
+                        </div>
+                    ))}
+
+                    {filteredQuestions.length === 0 && (
+                        <p className="text-sm text-slate-400 dark:text-slate-500">
+                            현재 필터 조건에 해당하는 문제가 없습니다.
+                        </p>
+                    )}
+                </div>
+
+                {/* 페이지네이션 */}
+                {totalPages > 1 && (
+                    <div className="mt-2 flex items-center justify-center gap-2 text-xs">
+                        <button
+                            type="button"
+                            disabled={currentPage <= 1}
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            className="rounded-full border border-slate-300 px-2 py-1 text-slate-600 disabled:opacity-40 dark:border-slate-600 dark:text-slate-200"
+                        >
+                            이전
+                        </button>
+                        <span className="text-slate-600 dark:text-slate-300">
+                            {currentPage} / {totalPages}
+                        </span>
+                        <button
+                            type="button"
+                            disabled={currentPage >= totalPages}
+                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                            className="rounded-full border border-slate-300 px-2 py-1 text-slate-600 disabled:opacity-40 dark:border-slate-600 dark:text-slate-200"
+                        >
+                            다음
+                        </button>
+                    </div>
+                )}
+            </section>
+
+            {/* 카드 3: 제출된 정답 관리 */}
+            <section className="h-fit rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-slate-100 dark:bg-slate-900/95 dark:ring-slate-800">
+                <div className="mb-3 flex items-center justify-between">
+                    <h2 className="text-sm md:text-base font-semibold text-slate-800 dark:text-slate-50">
+                        제출된 정답 관리 (고시 모드)
+                    </h2>
+                    <button
+                        type="button"
+                        onClick={handleExportCsv}
+                        className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+                    >
+                        CSV 내보내기
+                    </button>
+                </div>
+
+                {submissionsLoading ? (
+                    <p className="text-xs text-slate-500">로딩 중...</p>
+                ) : (
+                    <div className="space-y-2 text-xs md:text-sm">
+                        {submissions.map((s) => (
+                            <div
+                                key={s.id}
+                                className="rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800"
+                            >
+                                <div className="flex items-center justify-between gap-2">
+                                    <div>
+                                        <div className="font-medium text-slate-800 dark:text-slate-100">
+                                            {s.userName}{' '}
+                                            <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                                ({s.userEmail})
+                                            </span>
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                                            {s.groupName} · {s.scoreCorrect}/{s.scoreTotal} (
+                                            {Math.round(s.scoreRate)}%)
+                                        </div>
+                                    </div>
                                     <div className="flex gap-1">
                                         <button
                                             type="button"
-                                            className="rounded-full border border-slate-300 px-2 py-0.5 text-[11px] sm:text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
-                                            onClick={() => handleEditClick(q)}
+                                            className="rounded-full border border-slate-300 px-2 py-0.5 text-[11px] text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+                                            onClick={() => setSelectedSubmission(s)}
                                         >
-                                            편집
+                                            보기
                                         </button>
                                         <button
                                             type="button"
-                                            className="rounded-full border border-red-300 px-2 py-0.5 text-[11px] sm:text-xs text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-900/30"
-                                            onClick={() => handleDeleteClick(q.id)}
+                                            className="rounded-full border border-red-300 px-2 py-0.5 text-[11px] text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-900/30"
+                                            onClick={() => handleDeleteSubmissionClick(s.id)}
                                         >
                                             삭제
                                         </button>
                                     </div>
                                 </div>
-                                <p className="line-clamp-2 text-sm text-slate-800 dark:text-slate-100">
-                                    {q.question}
-                                </p>
                             </div>
                         ))}
 
-                        {filteredQuestions.length === 0 && (
-                            <p className="text-sm text-slate-400 dark:text-slate-500">
-                                현재 필터 조건에 해당하는 문제가 없습니다.
+                        {!submissions.length && (
+                            <p className="text-xs text-slate-400 dark:text-slate-500">
+                                아직 제출된 정답이 없습니다.
                             </p>
                         )}
                     </div>
+                )}
 
-
-                </section>
-
-                {/* 시험 설정 섹션 */}
-                <section className="h-fit rounded-2xl bg-white/95 p-4 shadow-lg ring-1 ring-slate-100 dark:bg-slate-900/95 dark:ring-slate-800">
-                    <h2 className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-50">
-                        시험 설정
-                    </h2>
-
-                    <div className="space-y-4 text-sm">
-                        {/* 타이머 */}
-                        <div className="space-y-3 border-b border-slate-200 pb-4 dark:border-slate-700">
-                            <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        id="timerEnabled"
-                                        type="checkbox"
-                                        className="h-4 w-4"
-                                        checked={timerEnabled}
-                                        onChange={(e) =>
-                                            setTimerEnabled(e.target.checked)
-                                        }
-                                    />
-                                    <label
-                                        htmlFor="timerEnabled"
-                                        className="text-sm text-slate-700 dark:text-slate-100"
-                                    >
-                                        타이머 사용
-                                    </label>
+                {/* 선택된 제출 상세 */}
+                {selectedSubmission && (
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs shadow-sm dark:border-slate-700 dark:bg-slate-800 md:text-sm">
+                        <div className="mb-2 flex items-center justify-between">
+                            <div>
+                                <div className="font-semibold text-slate-800 dark:text-slate-100">
+                                    {selectedSubmission.userName} ({selectedSubmission.userEmail})
                                 </div>
-                                {timerEnabled && (
-                                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                                        현재 설정: {timerMinutes}분
-                                    </span>
-                                )}
+                                <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                                    {selectedSubmission.groupName}
+                                </div>
                             </div>
-
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                                    시간 (분)
-                                </label>
-                                <input
-                                    type="number"
-                                    min={1}
-                                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
-                                    value={timerMinutes}
-                                    onChange={(e) =>
-                                        setTimerMinutes(e.target.value)
-                                    }
-                                    disabled={!timerEnabled}
-                                />
-                            </div>
+                            <button
+                                type="button"
+                                className="rounded-full border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                                onClick={() => setSelectedSubmission(null)}
+                            >
+                                닫기
+                            </button>
                         </div>
 
-                        {/* 채점 모드 */}
-                        <div className="space-y-3">
-                            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                                채점 모드
-                            </h3>
-
-                            <div className="space-y-2 rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
-                                <label className="flex cursor-pointer items-start gap-2 text-xs">
-                                    <input
-                                        type="radio"
-                                        name="gradingMode"
-                                        className="mt-[2px]"
-                                        value="immediate"
-                                        checked={gradingMode === 'immediate'}
-                                        onChange={(e) =>
-                                            setGradingMode(e.target.value)
-                                        }
-                                    />
-                                    <div>
-                                        <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
-                                            한 문제씩 바로 채점 모드
+                        {Array.isArray(selectedSubmission.details) ? (
+                            <div className="space-y-2">
+                                {selectedSubmission.details.map((d, idx) => (
+                                    <div
+                                        key={d.questionId || idx}
+                                        className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] dark:border-slate-700 dark:bg-slate-900"
+                                    >
+                                        <div className="font-medium text-slate-800 dark:text-slate-100">
+                                            {idx + 1}. {d.questionText}
                                         </div>
-                                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                            각 문제를 풀고 바로 정답을 확인하며 다음 문항으로
-                                            넘어갑니다.
-                                        </p>
-                                    </div>
-                                </label>
-
-                                <label className="flex cursor-pointer items-start gap-2 text-xs">
-                                    <input
-                                        type="radio"
-                                        name="gradingMode"
-                                        className="mt-[2px]"
-                                        value="batch"
-                                        checked={gradingMode === 'batch'}
-                                        onChange={(e) =>
-                                            setGradingMode(e.target.value)
-                                        }
-                                    />
-                                    <div>
-                                        <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
-                                            전체 채점 모드
+                                        <div className="mt-0.5 text-slate-600 dark:text-slate-300">
+                                            내 답: {d.userAnswer || '(미응답)'}
                                         </div>
-                                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                            모든 문제를 다 풀고 나서 한 번에 정답 확인 및 결과
-                                            화면을 보여줍니다.
-                                        </p>
+                                        <div className="text-slate-600 dark:text-slate-300">
+                                            정답: {d.correctAnswer}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                                            {d.isCorrect ? '정답' : '오답'}
+                                        </div>
                                     </div>
-                                </label>
+                                ))}
                             </div>
-
-                            {/* 정답 표시 옵션 */}
-                            <div className="space-y-2 rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
-                                <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-100">
-                                    정답 표시 옵션
-                                </h4>
-                                <label className="flex cursor-pointer items-center gap-2 text-xs">
-                                    <input
-                                        type="checkbox"
-                                        className="h-4 w-4"
-                                        checked={showCorrectOnWrong}
-                                        onChange={(e) =>
-                                            setShowCorrectOnWrong(
-                                                e.target.checked
-                                            )
-                                        }
-                                    />
-                                    <span className="text-sm text-slate-700 dark:text-slate-100">
-                                        틀린 문제의 정답을 보여주기
-                                    </span>
-                                </label>
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                    체크 해제 시 수험자는 오답 여부만 확인하고, 정답 텍스트는
-                                    볼 수 없습니다.
-                                </p>
-                            </div>
-                        </div>
-
-                        <button
-                            type="button"
-                            onClick={handleSaveSettings}
-                            disabled={settingsSaving}
-                            className="mt-2 w-full rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0575E6]"
-                        >
-                            {settingsSaving
-                                ? '설정 저장 중...'
-                                : '설정 저장'}
-                        </button>
+                        ) : (
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                상세 정답 정보가 없습니다.
+                            </p>
+                        )}
                     </div>
-                </section>
-            </div>
+                )}
+            </section>
         </div>
     );
 }
