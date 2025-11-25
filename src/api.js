@@ -1,6 +1,6 @@
 // src/api.js
 export const API_BASE_URL =
-  'https://script.google.com/macros/s/AKfycbweSNbY_8iWJo7UiuTYJ2PQKSJBtxGLmA0C82RBZWM36HWL4TxHyGrmcbI46sV3Riaj/exec';
+  'https://script.google.com/macros/s/AKfycbyGquHrUYccfzsB-RiGVYwiozB4lPOYul5FcWUzUHUwYnLUekiVIVo-j-mBd7v48Y8F/exec';
 
 // 공통 JSON fetch 헬퍼
 async function fetchJson(url, options = {}) {

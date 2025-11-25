@@ -12,7 +12,99 @@ function shuffle(array) {
     return arr;
 }
 
-function GosiPage({ questions, settings, groups = [] }) {
+// 텍스트 리소스
+const TEXT = {
+    ko: {
+        title: '고시 모드',
+        name: '이름',
+        email: '이메일',
+        group: '문제 은행 그룹',
+        selectPlaceholder: '선택해주세요',
+        startExam: '시험 시작',
+        submitAnswers: '정답 제출',
+        retry: '다시 시험 보기',
+        totalQuestions: (total, answered) =>
+            `총 ${total}문제 · 답변 완료 ${answered}개`,
+        resultTitle: '결과 요약',
+        resultDesc: '정답 수와 각 문항별 정답/오답 상태를 확인하세요.',
+        correctLabel: '정답',
+        wrongLabel: '오답',
+        myAnswer: '내 답',
+        noAnswer: '(미응답)',
+        explanation: '해설',
+        correctRateLabel: (rate) => `정답률 ${rate}%`,
+        alerts: {
+            name: '이름을 입력해주세요.',
+            email: '이메일을 입력해주세요.',
+            group: '문제 은행 그룹을 선택해주세요.',
+            noGroupInfo: '선택한 문제 은행 그룹 정보를 찾을 수 없습니다.',
+            noQuestions: '선택한 그룹에 등록된 문제가 없습니다.',
+            timeOver: '시간 종료!',
+        },
+        unitQuestion: '문항'
+    },
+    en: {
+        title: 'Exam Mode',
+        name: 'Name',
+        email: 'Email',
+        group: 'Question Bank Group',
+        selectPlaceholder: 'Please select',
+        startExam: 'Start Exam',
+        submitAnswers: 'Submit Answers',
+        retry: 'Take exam again',
+        totalQuestions: (total, answered) =>
+            `Total ${total} questions · Answered ${answered}`,
+        resultTitle: 'Summary',
+        resultDesc: 'Check which questions were correct or wrong.',
+        correctLabel: 'Correct',
+        wrongLabel: 'Wrong',
+        myAnswer: 'Your answer',
+        noAnswer: '(No answer)',
+        explanation: 'Explanation',
+        correctRateLabel: (rate) => `Accuracy ${rate}%`,
+        alerts: {
+            name: 'Please enter your name.',
+            email: 'Please enter your email.',
+            group: 'Please select a question bank group.',
+            noGroupInfo: 'Cannot find the selected group info.',
+            noQuestions: 'No questions in the selected group.',
+            timeOver: 'Time is up!',
+        },
+        unitQuestion: 'questions'
+    },
+};
+
+// 한/영 공통 헬퍼
+function getQuestionText(q, language) {
+    if (language === 'en' && q.questionEn) return q.questionEn;
+    return q.question || '';
+}
+
+function getOptionText(q, originalIndex, language) {
+    if (q.type !== 'mc') return '';
+    const ko = (q.options || [])[originalIndex] || '';
+    const en = (q.optionsEn || [])[originalIndex] || '';
+    if (language === 'en' && en) return en;
+    return ko;
+}
+
+function getExplanationText(q, language) {
+    if (language === 'en' && q.explanationEn) {
+        return q.explanationEn;
+    }
+    return q.explanation || '';
+}
+
+function getSaAnswerForGrading(q, language) {
+    if (language === 'en' && q.answerEn) {
+        return q.answerEn;
+    }
+    return q.answer || '';
+}
+
+function GosiPage({ questions, settings, groups = [], language = 'ko' }) {
+    const t = TEXT[language] || TEXT.ko;
+
     // step: setup(시험 설정) | quiz(문제 풀이) | result(결과 보기)
     const [step, setStep] = useState('setup');
 
@@ -56,15 +148,15 @@ function GosiPage({ questions, settings, groups = [] }) {
     // ------------------------------
     const handleStart = () => {
         if (!userName.trim()) {
-            alert('이름을 입력해주세요.');
+            alert(t.alerts.name);
             return;
         }
         if (!userEmail.trim()) {
-            alert('이메일을 입력해주세요.');
+            alert(t.alerts.email);
             return;
         }
         if (!selectedGroupId) {
-            alert('문제 은행 그룹을 선택해주세요.');
+            alert(t.alerts.group);
             return;
         }
 
@@ -72,7 +164,7 @@ function GosiPage({ questions, settings, groups = [] }) {
             (g) => String(g.id) === String(selectedGroupId)
         );
         if (!selectedGroup) {
-            alert('선택한 문제 은행 그룹 정보를 찾을 수 없습니다.');
+            alert(t.alerts.noGroupInfo);
             return;
         }
 
@@ -81,7 +173,7 @@ function GosiPage({ questions, settings, groups = [] }) {
         );
 
         if (groupQuestions.length === 0) {
-            alert('선택한 그룹에 등록된 문제가 없습니다.');
+            alert(t.alerts.noQuestions);
             return;
         }
 
@@ -96,8 +188,9 @@ function GosiPage({ questions, settings, groups = [] }) {
 
         const prepared = picked.map((q) => {
             if (q.type === 'mc') {
-                const optionObjects = q.options.map((text, i) => ({
-                    text,
+                // 보기 인덱스 기반으로 섞기
+                const optionObjects = (q.options || []).map((_, i) => ({
+                    index: i,
                     isCorrect: i === q.answerIndex,
                 }));
                 const shuffledOptions = shuffle(optionObjects);
@@ -147,7 +240,11 @@ function GosiPage({ questions, settings, groups = [] }) {
                 newResult[q.id] = { correct: isCorrect };
             } else {
                 const user = String(userAnswer).trim().toLowerCase();
-                const right = String(q.answer).trim().toLowerCase();
+                const right = String(
+                    getSaAnswerForGrading(q, language)
+                )
+                    .trim()
+                    .toLowerCase();
                 const isCorrect = user === right;
                 if (isCorrect) correct++;
                 newResult[q.id] = { correct: isCorrect };
@@ -170,7 +267,7 @@ function GosiPage({ questions, settings, groups = [] }) {
         if (!timerRunning || remainingSeconds == null) return;
         if (remainingSeconds <= 0) {
             setTimerRunning(false);
-            alert('시간 종료!');
+            alert(t.alerts.timeOver);
             gradeAll();
             setStep('result');
             return;
@@ -184,7 +281,7 @@ function GosiPage({ questions, settings, groups = [] }) {
 
         return () => clearInterval(id);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [timerRunning, remainingSeconds]);
+    }, [timerRunning, remainingSeconds, language]);
 
     // ------------------------------
     // 정답 제출 (저장)
@@ -202,23 +299,49 @@ function GosiPage({ questions, settings, groups = [] }) {
 
         const details = quizQuestions.map((q) => {
             const rawUser = answers[q.id];
+
+            // 기본값
             let userAnswerText = '';
             let correctAnswerText = '';
 
             if (q.type === 'mc') {
+                // ✅ 객관식 → 항상 한글 보기 기준으로 저장
                 const userIndex =
                     rawUser != null ? Number(rawUser) : null;
                 const userOpt =
-                    userIndex != null
-                        ? q.shuffledOptions[userIndex]
-                        : null;
-                userAnswerText = userOpt ? userOpt.text : '';
+                    userIndex != null ? q.shuffledOptions[userIndex] : null;
+                const userOptionIdx = userOpt ? userOpt.index : null;
 
-                const correctOpt = q.options[q.answerIndex];
-                correctAnswerText = correctOpt || '';
+                const koOptions = q.options || [];
+
+                // 사용자 답(보기 텍스트, 한글)
+                userAnswerText =
+                    userOptionIdx != null
+                        ? koOptions[userOptionIdx] || ''
+                        : '';
+
+                // 정답(한글)
+                correctAnswerText = koOptions[q.answerIndex] || '';
             } else {
-                userAnswerText = rawUser != null ? String(rawUser) : '';
-                correctAnswerText = q.answer || '';
+                // ✅ 주관식 → 언어에 따라 정답 텍스트 분기
+
+                // 사용자가 입력한 건 그대로
+                userAnswerText =
+                    rawUser != null ? String(rawUser) : '';
+
+                if (language === 'en') {
+                    // 영어 모드로 시험 본 경우
+                    correctAnswerText =
+                        (q.answerEn && String(q.answerEn)) ||
+                        (q.answer && String(q.answer)) ||
+                        '';
+                } else {
+                    // 한국어 모드로 시험 본 경우
+                    correctAnswerText =
+                        (q.answer && String(q.answer)) ||
+                        (q.answerEn && String(q.answerEn)) ||
+                        '';
+                }
             }
 
             const isCorrect =
@@ -226,7 +349,8 @@ function GosiPage({ questions, settings, groups = [] }) {
 
             return {
                 questionId: q.id,
-                questionText: q.question,
+                // ✅ 문제 텍스트는 어드민에서 한글 위주로 보고 싶어 하셔서 한글 question 사용
+                questionText: q.question || '',
                 userAnswer: userAnswerText,
                 correctAnswer: correctAnswerText,
                 isCorrect,
@@ -247,6 +371,7 @@ function GosiPage({ questions, settings, groups = [] }) {
                 scoreCorrect: summary.correct,
                 scoreTotal: summary.total,
                 scoreRate: rate,
+                // 🔥 여기 details가 그대로 submissions 시트에 들어감
                 details,
             });
         } catch (e) {
@@ -270,18 +395,18 @@ function GosiPage({ questions, settings, groups = [] }) {
                 <div className="mb-4 flex items-center justify-between">
                     <div>
                         <p className="text-base md:text-lg font-semibold text-slate-900 dark:text-slate-100">
-                            결과 요약
+                            {t.resultTitle}
                         </p>
                         <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">
-                            정답 수와 각 문항별 정답/오답 상태를 확인하세요.
+                            {t.resultDesc}
                         </p>
                     </div>
                     <div className="text-right">
                         <div className="rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-4 py-1.5 text-sm md:text-base font-semibold text-white shadow-md">
-                            정답 {score.correct} / {score.total}
+                            {t.correctLabel} {score.correct} / {score.total}
                         </div>
                         <div className="mt-1 text-sm md:text-base text-slate-500 dark:text-slate-400">
-                            정답률 {correctRate}%
+                            {t.correctRateLabel(correctRate)}
                         </div>
                     </div>
                 </div>
@@ -303,14 +428,22 @@ function GosiPage({ questions, settings, groups = [] }) {
                                 userIndex != null
                                     ? q.shuffledOptions[userIndex]
                                     : null;
-                            userAnswerText = userOpt ? userOpt.text : '';
+                            userAnswerText = userOpt
+                                ? getOptionText(q, userOpt.index, language)
+                                : '';
 
-                            const correctOpt = q.options[q.answerIndex];
-                            correctAnswerText = correctOpt || '';
+                            correctAnswerText = getOptionText(
+                                q,
+                                q.answerIndex,
+                                language
+                            );
                         } else {
                             userAnswerText =
                                 rawUser != null ? String(rawUser) : '';
-                            correctAnswerText = q.answer || '';
+                            correctAnswerText = getSaAnswerForGrading(
+                                q,
+                                language
+                            );
                         }
 
                         const containerBase =
@@ -330,41 +463,46 @@ function GosiPage({ questions, settings, groups = [] }) {
                             >
                                 <div className="mb-1 flex items-center justify-between gap-2">
                                     <p className="font-medium text-slate-900 dark:text-slate-50">
-                                        {idx + 1}. {q.question}
+                                        {idx + 1}. {getQuestionText(q, language)}
                                     </p>
                                     <span
                                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs md:text-sm ${badgeClass}`}
                                     >
-                                        {isCorrect ? '정답' : '오답'}
+                                        {isCorrect
+                                            ? t.correctLabel
+                                            : t.wrongLabel}
                                     </span>
                                 </div>
 
                                 <div className="mt-1 space-y-1.5 text-sm md:text-base text-slate-700 dark:text-slate-200">
                                     <p>
-                                        <span className="font-semibold">내 답:</span>{' '}
+                                        <span className="font-semibold">
+                                            {t.myAnswer}:
+                                        </span>{' '}
                                         {userAnswerText || (
                                             <span className="text-slate-400">
-                                                (미응답)
+                                                {t.noAnswer}
                                             </span>
                                         )}
                                     </p>
 
-                                    {/* 🔴 오답일 때만 정답 표시 */}
                                     {!isCorrect && (
                                         <p>
-                                            <span className="font-semibold">정답:</span>{' '}
+                                            <span className="font-semibold">
+                                                {t.correctLabel}:
+                                            </span>{' '}
                                             {correctAnswerText}
                                         </p>
                                     )}
 
-                                    {q.explanation && (
+                                    {q.explanation || q.explanationEn ? (
                                         <p className="mt-1 text-sm md:text-base text-slate-600 dark:text-slate-300">
                                             <span className="font-semibold">
-                                                해설:
+                                                {t.explanation}:
                                             </span>{' '}
-                                            {q.explanation}
+                                            {getExplanationText(q, language)}
                                         </p>
-                                    )}
+                                    ) : null}
                                 </div>
                             </div>
                         );
@@ -373,8 +511,6 @@ function GosiPage({ questions, settings, groups = [] }) {
             </div>
         );
     };
-
-
 
     const handleGoToSetup = () => {
         setStep('setup');
@@ -401,40 +537,44 @@ function GosiPage({ questions, settings, groups = [] }) {
                 <div className="relative w-full overflow-hidden rounded-2xl bg-white/90 p-6 shadow-xl ring-1 ring-slate-100 dark:bg-slate-900/90 dark:ring-slate-800">
                     <div className="relative space-y-5">
                         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
-                            고시 모드
+                            {t.title}
                         </h2>
 
-                        <div className="space-y-4 text-sm">
+                        <div className="space-y-4 text-sm md:text-base">
                             {/* 이름 */}
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                    이름
+                                    {t.name}
                                 </label>
                                 <input
                                     type="text"
                                     className="w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
                                     value={userName}
-                                    onChange={(e) => setUserName(e.target.value)}
+                                    onChange={(e) =>
+                                        setUserName(e.target.value)
+                                    }
                                 />
                             </div>
 
                             {/* 이메일 */}
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                    이메일
+                                    {t.email}
                                 </label>
                                 <input
                                     type="email"
                                     className="w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50"
                                     value={userEmail}
-                                    onChange={(e) => setUserEmail(e.target.value)}
+                                    onChange={(e) =>
+                                        setUserEmail(e.target.value)
+                                    }
                                 />
                             </div>
 
                             {/* 문제 은행 그룹 */}
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                    문제 은행 그룹
+                                    {t.group}
                                 </label>
                                 <SelectField
                                     value={selectedGroupId}
@@ -442,17 +582,15 @@ function GosiPage({ questions, settings, groups = [] }) {
                                         setSelectedGroupId(e.target.value)
                                     }
                                 >
-                                    <option value="">선택해주세요</option>
+                                    <option value="">
+                                        {t.selectPlaceholder}
+                                    </option>
                                     {sortedGroups.map((g) => (
                                         <option key={g.id} value={g.id}>
-                                            {g.name} ({g.questionCount}문항)
+                                            {g.name} ({g.questionCount} {t.unitQuestion})
                                         </option>
                                     ))}
                                 </SelectField>
-                                {/* <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    관리자가 생성한 문제 은행 그룹을 선택하면,
-                                    해당 그룹에서 지정된 문항 수만큼 무작위로 출제됩니다.
-                                </p> */}
                             </div>
                         </div>
 
@@ -462,7 +600,7 @@ function GosiPage({ questions, settings, groups = [] }) {
                                 onClick={handleStart}
                                 className="w-full rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0575E6]"
                             >
-                                시험 시작
+                                {t.startExam}
                             </button>
                         </div>
                     </div>
@@ -480,18 +618,22 @@ function GosiPage({ questions, settings, groups = [] }) {
                     <div className="flex items-center justify-between gap-2">
                         <div className="space-y-1">
                             <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
-                                고시 모드
+                                {t.title}
                             </h1>
 
                             {/* 문제/정답 요약 */}
                             {quizQuestions.length > 0 && (
                                 <div className="flex items-center justify-between text-sm md:text-base text-slate-500 dark:text-slate-400">
                                     <span>
-                                        총 {quizQuestions.length}문제 · 답변 완료 {answeredCount}개
+                                        {t.totalQuestions(
+                                            quizQuestions.length,
+                                            answeredCount
+                                        )}
                                     </span>
                                     {score && (
                                         <span className="font-semibold text-sky-600 dark:text-sky-400">
-                                            정답 {score.correct} / {score.total}
+                                            {t.correctLabel}{' '}
+                                            {score.correct} / {score.total}
                                         </span>
                                     )}
                                 </div>
@@ -518,10 +660,8 @@ function GosiPage({ questions, settings, groups = [] }) {
                             />
                         </div>
                     )}
-
                 </div>
             </header>
-
 
             {/* 문제 풀이 화면 */}
             {step === 'quiz' && (
@@ -536,7 +676,8 @@ function GosiPage({ questions, settings, groups = [] }) {
                                     >
                                         <div className="mb-2 flex items-center justify-between gap-2">
                                             <h3 className="text-base font-medium text-slate-800 dark:text-slate-50">
-                                                {idx + 1}. {q.question}
+                                                {idx + 1}.{' '}
+                                                {getQuestionText(q, language)}
                                             </h3>
                                             {q.groupName && (
                                                 <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] text-slate-700 dark:bg-slate-700 dark:text-slate-200">
@@ -569,7 +710,12 @@ function GosiPage({ questions, settings, groups = [] }) {
                                                             }
                                                         />
                                                         <span className="text-slate-800 dark:text-slate-100">
-                                                            {i + 1}. {opt.text}
+                                                            {i + 1}.{' '}
+                                                            {getOptionText(
+                                                                q,
+                                                                opt.index,
+                                                                language
+                                                            )}
                                                         </span>
                                                     </label>
                                                 ))}
@@ -580,7 +726,11 @@ function GosiPage({ questions, settings, groups = [] }) {
                                             <input
                                                 type="text"
                                                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-50"
-                                                placeholder="정답을 입력하세요"
+                                                placeholder={
+                                                    language === 'en'
+                                                        ? 'Enter your answer'
+                                                        : '정답을 입력하세요'
+                                                }
                                                 value={answers[q.id] || ''}
                                                 onChange={(e) =>
                                                     handleChangeAnswer(
@@ -600,7 +750,7 @@ function GosiPage({ questions, settings, groups = [] }) {
                                     onClick={handleGosiSubmit}
                                     className="rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0575E6]"
                                 >
-                                    정답 제출
+                                    {t.submitAnswers}
                                 </button>
                             </div>
                         </>
@@ -618,7 +768,7 @@ function GosiPage({ questions, settings, groups = [] }) {
                             onClick={handleGoToSetup}
                             className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
                         >
-                            다시 시험 보기
+                            {t.retry}
                         </button>
                     </div>
                 </section>

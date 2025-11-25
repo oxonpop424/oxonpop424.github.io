@@ -7,6 +7,33 @@ import AdminPage from './pages/AdminPage';
 import MeditLogo from './assets/logo.svg';
 import { fetchAll } from './api';
 
+const UI_TEXT = {
+  ko: {
+    appTitle: '문제은행',
+    madeByLabel: 'Made by',
+    gosi: '고시 모드',
+    quiz: '퀴즈 모드',
+    gosiShort: '고시',
+    quizShort: '퀴즈',
+    loading: '로딩 중...',
+    themeLight: '☀️ Light',
+    themeDark: '🌙 Dark',
+    langToggle: 'EN',
+  },
+  en: {
+    appTitle: 'Question Bank',
+    madeByLabel: 'Made by',
+    gosi: 'Exam Mode',
+    quiz: 'Quiz Mode',
+    gosiShort: 'Exam',
+    quizShort: 'Quiz',
+    loading: 'Loading...',
+    themeLight: '☀️ Light',
+    themeDark: '🌙 Dark',
+    langToggle: 'KO',
+  },
+};
+
 function App() {
   const [questions, setQuestions] = useState([]);
   const [settings, setSettings] = useState({});
@@ -19,9 +46,21 @@ function App() {
     return saved === 'dark' ? 'dark' : 'light';
   });
 
+  // 언어 상태: ko / en
+  const [language, setLanguage] = useState(() => {
+    const saved = window.localStorage.getItem('language');
+    return saved === 'en' ? 'en' : 'ko';
+  });
+
+  const t = UI_TEXT[language] || UI_TEXT.ko;
+
   useEffect(() => {
     window.localStorage.setItem('theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    window.localStorage.setItem('language', language);
+  }, [language]);
 
   useEffect(() => {
     (async () => {
@@ -42,11 +81,15 @@ function App() {
     setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
   };
 
+  const toggleLanguage = () => {
+    setLanguage((lng) => (lng === 'ko' ? 'en' : 'ko'));
+  };
+
   if (loading) {
     return (
       <div className={theme === 'dark' ? 'dark' : ''}>
         <div className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-700 dark:bg-slate-950 dark:text-slate-100">
-          로딩 중...
+          {t.loading}
         </div>
       </div>
     );
@@ -57,31 +100,26 @@ function App() {
       <div className="min-h-screen bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
         {/* 상단 공통 헤더 */}
         <header className="border-b border-slate-200 bg-white/80 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/80">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 gap-3">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
             <div className="flex flex-col">
-              <a
-                href="/"
-                className="flex h-5 items-center gap-2"
-              >
+              <a href="/" className="flex h-5 items-center gap-2">
                 <img
                   src={MeditLogo}
                   alt="Medit 메인 로고"
                   className="h-3 w-auto object-contain"
                 />
                 <span className="text-[16px] font-semibold">
-                  문제은행
+                  {t.appTitle}
                 </span>
               </a>
               <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                Made by{' '}
-                <span className="font-semibold">
-                  Oksu Kwak
-                </span>
+                {t.madeByLabel}{' '}
+                <span className="font-semibold">Oksu Kwak</span>
               </span>
             </div>
 
             {/* 가운데 네비게이션 */}
-            <nav className="hidden sm:flex items-center gap-2 text-xs sm:text-sm">
+            <nav className="hidden items-center gap-2 text-xs sm:flex sm:text-sm">
               <NavLink
                 to="/"
                 className={({ isActive }) =>
@@ -93,7 +131,7 @@ function App() {
                   ].join(' ')
                 }
               >
-                고시 모드
+                {t.gosi}
               </NavLink>
               <NavLink
                 to="/quiz"
@@ -106,12 +144,12 @@ function App() {
                   ].join(' ')
                 }
               >
-                퀴즈 모드
+                {t.quiz}
               </NavLink>
             </nav>
 
-            {/* 모바일에서 간단히 링크 묶기 */}
-            <div className="flex items-center gap-2 sm:hidden text-[11px]">
+            {/* 모바일 네비 */}
+            <div className="flex items-center gap-2 text-[11px] sm:hidden">
               <NavLink
                 to="/"
                 className={({ isActive }) =>
@@ -123,7 +161,7 @@ function App() {
                   ].join(' ')
                 }
               >
-                고시
+                {t.gosiShort}
               </NavLink>
               <NavLink
                 to="/quiz"
@@ -136,17 +174,27 @@ function App() {
                   ].join(' ')
                 }
               >
-                퀴즈
+                {t.quizShort}
               </NavLink>
             </div>
 
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              {theme === 'dark' ? '🌙 Dark' : '☀️ Light'}
-            </button>
+            {/* 우측 토글들 */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleLanguage}
+                className="flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                {language === 'ko' ? 'KO' : 'EN'}
+              </button>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                {theme === 'dark' ? t.themeDark : t.themeLight}
+              </button>
+            </div>
           </div>
         </header>
 
@@ -160,6 +208,7 @@ function App() {
                   questions={questions}
                   settings={settings}
                   groups={groups}
+                  language={language}
                 />
               }
             />
@@ -170,6 +219,7 @@ function App() {
                   questions={questions}
                   settings={settings}
                   groups={groups}
+                  language={language}
                 />
               }
             />
