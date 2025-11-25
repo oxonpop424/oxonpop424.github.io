@@ -726,7 +726,7 @@ function AdminPage({
                     {options.length > 2 && (
                       <button
                         type="button"
-                        className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                        className="rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-600 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
                         onClick={() =>
                           handleRemoveOption(i)
                         }
@@ -739,7 +739,7 @@ function AdminPage({
               </div>
               <button
                 type="button"
-                className="mt-1 rounded-full border border-dashed border-slate-400 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                className="mt-1 rounded-full border border-dashed border-slate-400 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
                 onClick={handleAddOption}
               >
                 + 보기 추가
