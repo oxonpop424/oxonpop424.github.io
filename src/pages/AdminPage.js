@@ -22,7 +22,7 @@ const LABEL_CLASS =
 const INPUT_CLASS =
   'w-full rounded-md border border-slate-300 px-3 py-2 text-sm md:text-base text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0575E6] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50';
 const SMALL_TEXT_MUTED =
-  'text-base text-slate-500 dark:text-slate-400';
+  'text-sm md:text-base text-slate-500 dark:text-slate-400';
 
 function AdminPage({
   questions,
@@ -380,46 +380,46 @@ function AdminPage({
     }
   };
 
-  const handleExportCsv = () => {
-    if (!submissions.length) {
-      alert('내보낼 데이터가 없습니다.');
-      return;
-    }
-    const header = [
-      'id',
-      'timestamp',
-      'userName',
-      'userEmail',
-      'groupName',
-      'scoreCorrect',
-      'scoreTotal',
-      'scoreRate',
-    ];
-    const lines = [
-      header.join(','),
-      ...submissions.map((s) =>
-        [
-          s.id,
-          s.timestamp,
-          `"${s.userName || ''}"`,
-          `"${s.userEmail || ''}"`,
-          `"${s.groupName || ''}"`,
-          s.scoreCorrect,
-          s.scoreTotal,
-          s.scoreRate,
-        ].join(',')
-      ),
-    ];
-    const blob = new Blob([lines.join('\n')], {
-      type: 'text/csv;charset=utf-8;',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'submissions.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+//   const handleExportCsv = () => {
+//     if (!submissions.length) {
+//       alert('내보낼 데이터가 없습니다.');
+//       return;
+//     }
+//     const header = [
+//       'id',
+//       'timestamp',
+//       'userName',
+//       'userEmail',
+//       'groupName',
+//       'scoreCorrect',
+//       'scoreTotal',
+//       'scoreRate',
+//     ];
+//     const lines = [
+//       header.join(','),
+//       ...submissions.map((s) =>
+//         [
+//           s.id,
+//           s.timestamp,
+//           `"${s.userName || ''}"`,
+//           `"${s.userEmail || ''}"`,
+//           `"${s.groupName || ''}"`,
+//           s.scoreCorrect,
+//           s.scoreTotal,
+//           s.scoreRate,
+//         ].join(',')
+//       ),
+//     ];
+//     const blob = new Blob([lines.join('\n')], {
+//       type: 'text/csv;charset=utf-8;',
+//     });
+//     const url = URL.createObjectURL(blob);
+//     const a = document.createElement('a');
+//     a.href = url;
+//     a.download = 'submissions.csv';
+//     a.click();
+//     URL.revokeObjectURL(url);
+//   };
 
   // ----------- 문제 목록 필터/페이지네이션 ----------- //
   const sortedGroups = [...(groups || [])].sort((a, b) =>
@@ -527,7 +527,7 @@ function AdminPage({
 
       {/* 메시지 */}
       {infoMessage && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 shadow-sm dark:border-emerald-500/60 dark:bg-emerald-900/30 dark:text-emerald-100">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm md:text-base text-emerald-800 shadow-sm dark:border-emerald-500/60 dark:bg-emerald-900/30 dark:text-emerald-100">
           {infoMessage}
         </div>
       )}
@@ -539,7 +539,7 @@ function AdminPage({
         {/* 그룹 폼 */}
         <form
           onSubmit={handleSubmitGroup}
-          className="space-y-3 text-sm"
+          className="space-y-3 text-sm md:text-base"
         >
           <div className="space-y-1">
             <label className={LABEL_CLASS}>그룹 이름</label>
@@ -570,14 +570,14 @@ function AdminPage({
             <button
               type="submit"
               disabled={groupSaving}
-              className="rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0575E6]"
+              className="rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-5 py-2 text-sm md:text-base font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0575E6]"
             >
               {editingGroupId ? '그룹 수정' : '그룹 추가'}
             </button>
             <button
               type="button"
               onClick={resetGroupForm}
-              className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+              className="rounded-full border border-slate-300 px-4 py-2 text-sm md:text-base text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
             >
               초기화
             </button>
@@ -586,13 +586,13 @@ function AdminPage({
 
         {/* 그룹 리스트 */}
         <div className="mt-5 h-px w-full bg-slate-200 dark:bg-slate-800" />
-        <div className="mt-4 space-y-2 text-sm">
+        <div className="mt-4 space-y-2 text-sm md:text-base">
           {sortedGroups.map((g) => (
             <div
               key={g.id}
               className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800"
             >
-              <div className="text-base text-slate-800 dark:text-slate-100">
+              <div className="text-sm md:text-base text-slate-800 dark:text-slate-100">
                 <span className="font-semibold">
                   {g.name}
                 </span>{' '}
@@ -600,17 +600,17 @@ function AdminPage({
                   ({g.questionCount}문항 출제)
                 </span>
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex gap-1.5 text-sm md:text-base">
                 <button
                   type="button"
-                  className="rounded-full border border-slate-300 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+                  className="rounded-full border border-slate-300 px-3 py-1 text-sm md:text-base font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
                   onClick={() => handleEditGroup(g)}
                 >
                   수정
                 </button>
                 <button
                   type="button"
-                  className="rounded-full border border-red-300 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-900/30"
+                  className="rounded-full border border-red-300 px-3 py-1 text-sm md:text-base font-medium text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-900/30"
                   onClick={() =>
                     handleDeleteGroupClick(g.id)
                   }
@@ -644,7 +644,7 @@ function AdminPage({
 
         <form
           onSubmit={handleSubmitQuestion}
-          className="space-y-3 text-sm"
+          className="space-y-3 text-sm md:text-base"
         >
           {/* 🔄 UX: 문제 은행 그룹 → 유형 순서 */}
           <div className="grid gap-3 md:grid-cols-3">
@@ -702,7 +702,7 @@ function AdminPage({
                 {options.map((opt, i) => (
                   <div
                     key={i}
-                    className="flex items-center gap-2 text-sm"
+                    className="flex items-center gap-2 text-sm md:text-base"
                   >
                     <input
                       type="radio"
@@ -726,7 +726,7 @@ function AdminPage({
                     {options.length > 2 && (
                       <button
                         type="button"
-                        className="rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-600 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                        className="rounded-full border border-slate-300 px-3 py-1 text-sm md:text-base text-slate-600 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
                         onClick={() =>
                           handleRemoveOption(i)
                         }
@@ -739,7 +739,7 @@ function AdminPage({
               </div>
               <button
                 type="button"
-                className="mt-1 rounded-full border border-dashed border-slate-400 px-3 py-1 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                className="mt-1 rounded-full border border-dashed border-slate-400 px-3 py-1 text-sm md:text-base text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
                 onClick={handleAddOption}
               >
                 + 보기 추가
@@ -785,7 +785,7 @@ function AdminPage({
             <button
               type="submit"
               disabled={saving}
-              className="rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0575E6]"
+              className="rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-5 py-2 text-sm md:text-base font-semibold text-white shadow-md transition hover:shadow-lg disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0575E6]"
             >
               {saving
                 ? '저장 중...'
@@ -795,7 +795,7 @@ function AdminPage({
             </button>
             <button
               type="button"
-              className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+              className="rounded-full border border-slate-300 px-4 py-2 text-sm md:text-base text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
               onClick={resetForm}
             >
               초기화
@@ -810,12 +810,12 @@ function AdminPage({
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <h2 className={SECTION_TITLE_CLASS}>
               문제 목록{' '}
-              <span className="text-base md:text-base font-normal text-slate-500 dark:text-slate-400">
+              <span className="text-sm md:text-base font-normal text-slate-500 dark:text-slate-400">
                 (현재 필터 기준 {filteredCount}개)
               </span>
             </h2>
 
-            <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm">
+            <div className="flex flex-wrap items-center gap-2 text-sm md:text-base">
               <label className="flex items-center gap-1 text-slate-600 dark:text-slate-300">
                 <input
                   type="checkbox"
@@ -828,7 +828,7 @@ function AdminPage({
               <button
                 type="button"
                 onClick={handleBulkDelete}
-                className="rounded-full border border-red-300 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-900/30"
+                className="rounded-full border border-red-300 px-3 py-1 text-sm md:text-base font-medium text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-900/30"
               >
                 선택 삭제
               </button>
@@ -836,7 +836,7 @@ function AdminPage({
           </div>
 
           {/* 필터 */}
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-3 text-sm md:text-base">
             <div className="space-y-1 md:col-span-2">
               <label className={LABEL_CLASS}>
                 문제 은행 그룹
@@ -875,11 +875,11 @@ function AdminPage({
         </div>
 
         {/* 문제 목록 리스트 */}
-        <div className="mt-2 space-y-2 overflow-y-auto text-sm">
+        <div className="mt-2 space-y-2 overflow-y-auto text-sm md:text-base">
           {pagedQuestions.map((q) => (
             <div
               key={q.id}
-              className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800"
+              className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm md:text-base shadow-sm dark:border-slate-700 dark:bg-slate-800"
             >
               <div className="mb-1 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -893,7 +893,7 @@ function AdminPage({
                       toggleSelectQuestion(q.id)
                     }
                   />
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-sm text-slate-700 dark:bg-slate-700 dark:text-slate-100">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-sm md:text-base text-slate-700 dark:bg-slate-700 dark:text-slate-100">
                     {q.groupName && (
                       <>
                         <span>{q.groupName}</span>
@@ -907,31 +907,31 @@ function AdminPage({
                     </span>
                   </span>
                 </div>
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 text-sm md:text-base">
                   <button
                     type="button"
-                    className="rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+                    className="rounded-full border border-slate-300 px-3 py-1 text-sm md:text-base text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
                     onClick={() => handleEditClick(q)}
                   >
                     수정
                   </button>
                   <button
                     type="button"
-                    className="rounded-full border border-red-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-900/30"
+                    className="rounded-full border border-red-300 px-3 py-1 text-sm md:text-base text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-900/30"
                     onClick={() => handleDeleteClick(q.id)}
                   >
                     삭제
                   </button>
                 </div>
               </div>
-              <p className="line-clamp-2 text-base text-slate-800 dark:text-slate-100">
+              <p className="line-clamp-2 text-sm md:text-base text-slate-800 dark:text-slate-100">
                 {q.question}
               </p>
             </div>
           ))}
 
           {filteredQuestions.length === 0 && (
-            <p className="text-base text-slate-400 dark:text-slate-500">
+            <p className="text-sm md:text-base text-slate-400 dark:text-slate-500">
               현재 필터 조건에 해당하는 문제가 없습니다.
             </p>
           )}
@@ -939,18 +939,18 @@ function AdminPage({
 
         {/* 페이지네이션 */}
         {totalPages > 1 && (
-          <div className="mt-3 flex items-center justify-center gap-2 text-sm">
+          <div className="mt-3 flex items-center justify-center gap-2 text-sm md:text-base">
             <button
               type="button"
               disabled={currentPage <= 1}
               onClick={() =>
                 setPage((p) => Math.max(1, p - 1))
               }
-              className="rounded-full border border-slate-300 px-3 py-1 text-slate-600 disabled:opacity-40 dark:border-slate-600 dark:text-slate-200"
+              className="rounded-full border border-slate-300 px-3 py-1 text-sm md:text-base text-slate-600 disabled:opacity-40 dark:border-slate-600 dark:text-slate-200"
             >
               이전
             </button>
-            <span className="text-slate-600 dark:text-slate-300">
+            <span className="text-sm md:text-base text-slate-600 dark:text-slate-300">
               {currentPage} / {totalPages}
             </span>
             <button
@@ -961,7 +961,7 @@ function AdminPage({
                   Math.min(totalPages, p + 1)
                 )
               }
-              className="rounded-full border border-slate-300 px-3 py-1 text-slate-600 disabled:opacity-40 dark:border-slate-600 dark:text-slate-200"
+              className="rounded-full border border-slate-300 px-3 py-1 text-sm md:text-base text-slate-600 disabled:opacity-40 dark:border-slate-600 dark:text-slate-200"
             >
               다음
             </button>
@@ -975,120 +975,139 @@ function AdminPage({
           <h2 className={SECTION_TITLE_CLASS}>
             제출된 정답 관리 (고시 모드)
           </h2>
-          <button
+          {/* <button
             type="button"
             onClick={handleExportCsv}
-            className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+            className="rounded-full border border-slate-300 px-4 py-1.5 text-sm md:text-base font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
           >
             CSV 내보내기
-          </button>
+          </button> */}
         </div>
 
         {submissionsLoading ? (
           <p className={SMALL_TEXT_MUTED}>로딩 중...</p>
         ) : (
-          <div className="space-y-2 text-xs md:text-sm">
-            {submissions.map((s) => (
-              <div
-                key={s.id}
-                className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-700 dark:bg-slate-800"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="font-medium text-slate-800 dark:text-slate-100">
-                      {s.userName}{' '}
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                        ({s.userEmail})
-                      </span>
+          <div className="space-y-2 text-sm md:text-base">
+            {submissions.map((s) => {
+              const isOpen =
+                selectedSubmission &&
+                selectedSubmission.id === s.id;
+
+              return (
+                <div
+                  key={s.id}
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm md:text-base dark:border-slate-700 dark:bg-slate-800"
+                >
+                  {/* 상단 요약 영역 */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium text-slate-800 dark:text-slate-100">
+                        {s.userName}{' '}
+                        <span className="text-sm md:text-base text-slate-500 dark:text-slate-400">
+                          ({s.userEmail})
+                        </span>
+                      </div>
+                      <div className="text-sm md:text-base text-slate-500 dark:text-slate-400">
+                        {s.groupName} · {s.scoreCorrect}/
+                        {s.scoreTotal} (
+                        {Math.round(s.scoreRate)}%)
+                      </div>
                     </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {s.groupName} · {s.scoreCorrect}/
-                      {s.scoreTotal} (
-                      {Math.round(s.scoreRate)}%)
+                    <div className="flex gap-1.5 text-sm md:text-base">
+                      <button
+                        type="button"
+                        className="rounded-full border border-slate-300 px-3 py-1 text-sm md:text-base text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+                        onClick={() =>
+                          setSelectedSubmission((prev) =>
+                            prev && prev.id === s.id
+                              ? null
+                              : s
+                          )
+                        }
+                      >
+                        {isOpen ? '닫기' : '보기'}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full border border-red-300 px-3 py-1 text-sm md:text-base text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-900/30"
+                        onClick={() =>
+                          handleDeleteSubmissionClick(s.id)
+                        }
+                      >
+                        삭제
+                      </button>
                     </div>
                   </div>
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      className="rounded-full border border-slate-300 px-3 py-1 text-[11px] text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
-                      onClick={() =>
-                        setSelectedSubmission(s)
-                      }
-                    >
-                      보기
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-full border border-red-300 px-3 py-1 text-[11px] text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-900/30"
-                      onClick={() =>
-                        handleDeleteSubmissionClick(s.id)
-                      }
-                    >
-                      삭제
-                    </button>
-                  </div>
+
+{/* ▼ 상세 영역 (토글) */}
+{isOpen && (
+  <div className="mt-3">
+    {Array.isArray(s.details) ? (
+      <div className="space-y-3">
+        {s.details.map((d, idx) => {
+          const isCorrect = d.isCorrect === true;
+
+          const containerBase =
+            'rounded-xl border p-3.5 text-sm md:text-base shadow-sm';
+          const containerVariant = isCorrect
+            ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/60 dark:bg-emerald-900/30'
+            : 'border-red-200 bg-red-50 dark:border-red-500/60 dark:bg-red-900/30';
+
+          const badgeClass = isCorrect
+            ? 'bg-emerald-600/90 text-white'
+            : 'bg-red-600/90 text-white';
+
+          return (
+            <div
+              key={d.questionId || idx}
+              className={`${containerBase} ${containerVariant}`}
+            >
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <div className="font-medium text-slate-800 dark:text-slate-100">
+                  {idx + 1}. {d.questionText}
                 </div>
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs md:text-sm ${badgeClass}`}
+                >
+                  {isCorrect ? '정답' : '오답'}
+                </span>
               </div>
-            ))}
+
+              <div className="mt-1 space-y-1.5 text-sm md:text-base text-slate-700 dark:text-slate-200">
+                <div>
+                  <span className="font-semibold">내 답:</span>{' '}
+                  {d.userAnswer || (
+                    <span className="text-slate-400">(미응답)</span>
+                  )}
+                </div>
+
+                {/* 🔴 오답일 때만 정답 표시 */}
+                {!isCorrect && (
+                  <div>
+                    <span className="font-semibold">정답:</span>{' '}
+                    {d.correctAnswer}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    ) : (
+      <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">
+        상세 정답 정보가 없습니다.
+      </p>
+    )}
+  </div>
+)}
+
+                </div>
+              );
+            })}
 
             {!submissions.length && (
               <p className={SMALL_TEXT_MUTED}>
                 아직 제출된 정답이 없습니다.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* 선택된 제출 상세 */}
-        {selectedSubmission && (
-          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs shadow-sm dark:border-slate-700 dark:bg-slate-800 md:text-sm">
-            <div className="mb-2 flex items-center justify-between">
-              <div>
-                <div className="font-semibold text-slate-800 dark:text-slate-100">
-                  {selectedSubmission.userName} (
-                  {selectedSubmission.userEmail})
-                </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                  {selectedSubmission.groupName}
-                </div>
-              </div>
-              <button
-                type="button"
-                className="rounded-full border border-slate-300 px-3 py-1 text-[11px] text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
-                onClick={() => setSelectedSubmission(null)}
-              >
-                닫기
-              </button>
-            </div>
-
-            {Array.isArray(selectedSubmission.details) ? (
-              <div className="space-y-2">
-                {selectedSubmission.details.map(
-                  (d, idx) => (
-                    <div
-                      key={d.questionId || idx}
-                      className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] dark:border-slate-700 dark:bg-slate-900"
-                    >
-                      <div className="font-medium text-slate-800 dark:text-slate-100">
-                        {idx + 1}. {d.questionText}
-                      </div>
-                      <div className="mt-0.5 text-slate-600 dark:text-slate-300">
-                        내 답:{' '}
-                        {d.userAnswer || '(미응답)'}
-                      </div>
-                      <div className="text-slate-600 dark:text-slate-300">
-                        정답: {d.correctAnswer}
-                      </div>
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                        {d.isCorrect ? '정답' : '오답'}
-                      </div>
-                    </div>
-                  )
-                )}
-              </div>
-            ) : (
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                상세 정답 정보가 없습니다.
               </p>
             )}
           </div>

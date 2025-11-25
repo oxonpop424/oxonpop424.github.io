@@ -265,29 +265,29 @@ function GosiPage({ questions, settings, groups = [] }) {
         );
 
         return (
-            <div className="rounded-2xl border border-slate-200 bg-white/90 p-5 text-base shadow-md dark:border-slate-700 dark:bg-slate-900/90">
+            <div className="rounded-2xl border border-slate-200 bg-white/90 p-5 text-sm md:text-base shadow-md dark:border-slate-700 dark:bg-slate-900/90">
                 {/* 상단 요약 */}
                 <div className="mb-4 flex items-center justify-between">
                     <div>
-                        <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        <p className="text-base md:text-lg font-semibold text-slate-900 dark:text-slate-100">
                             결과 요약
                         </p>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                        <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">
                             정답 수와 각 문항별 정답/오답 상태를 확인하세요.
                         </p>
                     </div>
                     <div className="text-right">
-                        <div className="rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-4 py-1.5 text-sm font-semibold text-white shadow-md">
+                        <div className="rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] px-4 py-1.5 text-sm md:text-base font-semibold text-white shadow-md">
                             정답 {score.correct} / {score.total}
                         </div>
-                        <div className="mt-1 text-xs md:text-sm text-slate-500 dark:text-slate-400">
+                        <div className="mt-1 text-sm md:text-base text-slate-500 dark:text-slate-400">
                             정답률 {correctRate}%
                         </div>
                     </div>
                 </div>
 
                 {/* 문항별 상세 */}
-                <div className="mt-2 space-y-3">
+                <div className="mt-3 space-y-3">
                     {quizQuestions.map((q, idx) => {
                         const r = resultMap[q.id];
                         const isCorrect = r?.correct === true;
@@ -313,45 +313,52 @@ function GosiPage({ questions, settings, groups = [] }) {
                             correctAnswerText = q.answer || '';
                         }
 
+                        const containerBase =
+                            'rounded-xl border p-3.5 text-sm md:text-base shadow-sm';
+                        const containerVariant = isCorrect
+                            ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/60 dark:bg-emerald-900/30'
+                            : 'border-red-200 bg-red-50 dark:border-red-500/60 dark:bg-red-900/30';
+
                         const badgeClass = isCorrect
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-500/60'
-                            : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-200 dark:border-red-500/60';
+                            ? 'bg-emerald-600/90 text-white'
+                            : 'bg-red-600/90 text-white';
 
                         return (
                             <div
                                 key={q.id}
-                                className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800"
+                                className={`${containerBase} ${containerVariant}`}
                             >
                                 <div className="mb-1 flex items-center justify-between gap-2">
                                     <p className="font-medium text-slate-900 dark:text-slate-50">
                                         {idx + 1}. {q.question}
                                     </p>
                                     <span
-                                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] ${badgeClass}`}
+                                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs md:text-sm ${badgeClass}`}
                                     >
                                         {isCorrect ? '정답' : '오답'}
                                     </span>
                                 </div>
 
-                                <div className="mt-1 space-y-1.5 text-xs md:text-sm text-slate-700 dark:text-slate-200">
+                                <div className="mt-1 space-y-1.5 text-sm md:text-base text-slate-700 dark:text-slate-200">
                                     <p>
-                                        <span className="font-semibold">
-                                            내 답:
-                                        </span>{' '}
+                                        <span className="font-semibold">내 답:</span>{' '}
                                         {userAnswerText || (
                                             <span className="text-slate-400">
                                                 (미응답)
                                             </span>
                                         )}
                                     </p>
-                                    <p>
-                                        <span className="font-semibold">
-                                            정답:
-                                        </span>{' '}
-                                        {correctAnswerText}
-                                    </p>
+
+                                    {/* 🔴 오답일 때만 정답 표시 */}
+                                    {!isCorrect && (
+                                        <p>
+                                            <span className="font-semibold">정답:</span>{' '}
+                                            {correctAnswerText}
+                                        </p>
+                                    )}
+
                                     {q.explanation && (
-                                        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                                        <p className="mt-1 text-sm md:text-base text-slate-600 dark:text-slate-300">
                                             <span className="font-semibold">
                                                 해설:
                                             </span>{' '}
@@ -366,6 +373,8 @@ function GosiPage({ questions, settings, groups = [] }) {
             </div>
         );
     };
+
+
 
     const handleGoToSetup = () => {
         setStep('setup');
@@ -464,48 +473,55 @@ function GosiPage({ questions, settings, groups = [] }) {
 
     // 2) 문제 풀이 / 결과 페이지
     return (
-        <div className="mx-auto flex w-full max-w-5xl flex-col space-y-4 px-4 text-[15px] md:text-base">
-            {/* 상단 상태/타이머 */}
-            <div className="flex flex-col gap-2 rounded-2xl bg-white/90 p-4 shadow-md ring-1 ring-slate-100 dark:bg-slate-900/90 dark:ring-slate-800">
-                <div className="flex items-center justify-between text-sm">
-                    <div className="font-medium text-slate-700 dark:text-slate-200">
-                        {step === 'quiz'
-                            ? '고시 모드 · 문제 풀이 중'
-                            : '고시 모드 · 결과 확인'}
-                    </div>
-                    {timerEnabled && totalSeconds > 0 && (
-                        <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm font-semibold text-slate-800 dark:text-slate-100">
-                                {remainingSeconds != null
-                                    ? formatTime(remainingSeconds)
-                                    : formatTime(totalSeconds)}
-                            </span>
+        <div className="mx-auto flex w-full max-w-5xl flex-col space-y-4 text-[15px] md:text-base">
+            <header className="overflow-hidden rounded-2xl bg-white/95 p-5 shadow-xl ring-1 ring-slate-100 dark:bg-slate-900/95 dark:ring-slate-800">
+                <div className="relative space-y-3 text-sm md:text-base">
+                    {/* 제목 + 서브텍스트 + 타이머 */}
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="space-y-1">
+                            <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+                                고시 모드
+                            </h1>
+
+                            {/* 문제/정답 요약 */}
+                            {quizQuestions.length > 0 && (
+                                <div className="flex items-center justify-between text-sm md:text-base text-slate-500 dark:text-slate-400">
+                                    <span>
+                                        총 {quizQuestions.length}문제 · 답변 완료 {answeredCount}개
+                                    </span>
+                                    {score && (
+                                        <span className="font-semibold text-sky-600 dark:text-sky-400">
+                                            정답 {score.correct} / {score.total}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
                         </div>
-                    )}
-                </div>
 
-                {timerEnabled && totalSeconds > 0 && (
-                    <div className="h-2.5 w-full rounded-full bg-slate-200 dark:bg-slate-700">
-                        <div
-                            className="h-2.5 rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] transition-[width]"
-                            style={{ width: `${timeProgress}%` }}
-                        />
-                    </div>
-                )}
-
-                {quizQuestions.length > 0 && (
-                    <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                        <span>
-                            총 {quizQuestions.length}문제 · 답변 완료 {answeredCount}개
-                        </span>
-                        {score && (
-                            <span className="font-semibold text-sky-600 dark:text-sky-400">
-                                정답 {score.correct} / {score.total}
-                            </span>
+                        {timerEnabled && totalSeconds > 0 && (
+                            <div className="flex items-center gap-2">
+                                <span className="font-mono text-sm md:text-base font-semibold text-slate-800 dark:text-slate-100">
+                                    {remainingSeconds != null
+                                        ? formatTime(remainingSeconds)
+                                        : formatTime(totalSeconds)}
+                                </span>
+                            </div>
                         )}
                     </div>
-                )}
-            </div>
+
+                    {/* 타이머 프로그레스 바 */}
+                    {timerEnabled && totalSeconds > 0 && (
+                        <div className="h-2.5 w-full rounded-full bg-slate-200 dark:bg-slate-700">
+                            <div
+                                className="h-2.5 rounded-full bg-gradient-to-r from-[#0575E6] to-[#00F260] transition-[width]"
+                                style={{ width: `${timeProgress}%` }}
+                            />
+                        </div>
+                    )}
+
+                </div>
+            </header>
+
 
             {/* 문제 풀이 화면 */}
             {step === 'quiz' && (
@@ -534,7 +550,7 @@ function GosiPage({ questions, settings, groups = [] }) {
                                                 {q.shuffledOptions.map((opt, i) => (
                                                     <label
                                                         key={i}
-                                                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
+                                                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-base hover:bg-slate-100 dark:hover:bg-slate-700"
                                                     >
                                                         <input
                                                             type="radio"
