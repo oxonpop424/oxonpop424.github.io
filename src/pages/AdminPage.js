@@ -1003,7 +1003,7 @@ function AdminPage({
             {groups.map(g => (
               <div
                 key={g.id}
-                className="bg_WHITE dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 flex justify-between items-center"
+                className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 flex justify-between items-center"
               >
                 <div>
                   <h4 className="font-bold text-slate-800 dark:text-white text-sm md:text-base">
@@ -1060,7 +1060,7 @@ function AdminPage({
             subs.map(s => (
               <div
                 key={s.id}
-                className="bg_WHITE dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700"
+                className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700"
               >
                 <div className="flex justify-between items-start gap-3">
                   <div>
