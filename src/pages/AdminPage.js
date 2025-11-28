@@ -89,7 +89,19 @@ function AdminPage({
   hideLoader,
 }) {
   const [tab, setTab] = useState('q'); // q(uestions), g(roups), s(tats)
+
+  // isAdmin이 null/undefined일 땐 "아직 모름" 상태이므로, 그때는 읽기 전용으로 처리
   const readOnly = !isAdmin; // true면 수정/삭제 금지
+
+  // 🔒 관리자 아닐 때: 알림 후 로그인 페이지로 리디렉션
+  useEffect(() => {
+    if (isAdmin === null || isAdmin === undefined) return;
+
+    if (isAdmin === false) {
+      alert('권한이 없습니다.');
+      window.location.href = '/#/login';
+    }
+  }, [isAdmin]);
 
   // --- Questions State ---
   const [qForm, setQForm] = useState({
@@ -116,12 +128,12 @@ function AdminPage({
     name: '',
     count: 10,
     id: null,
-  }); // id present = edit mode
+  });
 
   // --- Stats State ---
   const [subs, setSubs] = useState([]);
   const [subLoading, setSubLoading] = useState(false);
-  const [viewSubId, setViewSubId] = useState(null); // Toggle detail view
+  const [viewSubId, setViewSubId] = useState(null);
 
   // === Handlers: Question ===
   const resetQForm = () => {
@@ -157,10 +169,22 @@ function AdminPage({
       groupName:
         groups.find(g => String(g.id) === String(qForm.groupId))?.name || '',
     };
+
     try {
       showLoader?.();
       if (editingId) {
-        await updateQuestion({ id: editingId, ...payload });
+        const res = await updateQuestion({ id: editingId, ...payload });
+        console.log('updateQuestion response:', res);
+
+        if (!res || res.status !== 'ok') {
+          alert(
+            `문제 수정 실패\n\n서버 메시지: ${
+              res && res.message ? res.message : '알 수 없는 오류'
+            }`,
+          );
+          return;
+        }
+
         setQuestions(
           questions.map(q =>
             q.id === editingId ? { ...q, ...payload, id: editingId } : q,
@@ -168,8 +192,20 @@ function AdminPage({
         );
       } else {
         const res = await createQuestion(payload);
+        console.log('createQuestion response:', res);
+
+        if (!res || res.status !== 'ok') {
+          alert(
+            `문제 등록 실패\n\n서버 메시지: ${
+              res && res.message ? res.message : '알 수 없는 오류'
+            }`,
+          );
+          return;
+        }
+
         setQuestions([...questions, { ...payload, id: res.id }]);
       }
+
       resetQForm();
       alert(ALERT.SAVE_SUCCESS);
     } catch (e) {
@@ -192,7 +228,8 @@ function AdminPage({
       explanation: q.explanation || '',
       questionEn: q.questionEn || '',
       optionsEn:
-        q.optionsEn || (q.options ? new Array(q.options.length).fill('') : ['', '']),
+        q.optionsEn ||
+        (q.options ? new Array(q.options.length).fill('') : ['', '']),
       answerEn: q.answerEn || '',
       explanationEn: q.explanationEn || '',
     });
@@ -205,9 +242,21 @@ function AdminPage({
       return;
     }
     if (!window.confirm('삭제하시겠습니까?')) return;
+
     try {
       showLoader?.();
-      await deleteQuestionById(id);
+      const res = await deleteQuestionById(id);
+      console.log('deleteQuestion response:', res);
+
+      if (!res || res.status !== 'ok') {
+        alert(
+          `삭제에 실패했습니다.\n\n서버 메시지: ${
+            res && res.message ? res.message : '알 수 없는 오류'
+          }`,
+        );
+        return;
+      }
+
       setQuestions(questions.filter(q => q.id !== id));
       alert(ALERT.DELETE_SUCCESS);
     } catch (e) {
@@ -225,14 +274,40 @@ function AdminPage({
     }
     if (!selectedIds.length || !window.confirm(`${selectedIds.length}개 삭제?`))
       return;
+
     try {
       showLoader?.();
+
+      const failedIds = [];
+
       for (const id of selectedIds) {
-        await deleteQuestionById(id);
+        const res = await deleteQuestionById(id);
+        console.log('deleteQuestion (bulk) response:', id, res);
+        if (!res || res.status !== 'ok') {
+          failedIds.push({ id, res });
+        }
       }
-      setQuestions(questions.filter(q => !selectedIds.includes(q.id)));
+
+      if (failedIds.length) {
+        const first = failedIds[0];
+        alert(
+          `일부 문제 삭제에 실패했습니다.\n\n예: ${first.id} → ${
+            first.res && first.res.message
+              ? first.res.message
+              : '알 수 없는 오류'
+          }`,
+        );
+      }
+
+      const successIds = selectedIds.filter(
+        id => !failedIds.some(f => f.id === id),
+      );
+      if (successIds.length) {
+        setQuestions(questions.filter(q => !successIds.includes(q.id)));
+        alert(ALERT.DELETE_SUCCESS);
+      }
+
       setSelectedIds([]);
-      alert(ALERT.DELETE_SUCCESS);
     } catch (e) {
       console.error(e);
       alert('삭제 중 오류가 발생했습니다.');
@@ -248,14 +323,26 @@ function AdminPage({
       return;
     }
     if (!gForm.name) return;
+
     try {
       showLoader?.();
       if (gForm.id) {
-        await updateGroup({
+        const res = await updateGroup({
           id: gForm.id,
           name: gForm.name,
           questionCount: gForm.count,
         });
+        console.log('updateGroup response:', res);
+
+        if (!res || res.status !== 'ok') {
+          alert(
+            `그룹 수정 실패\n\n서버 메시지: ${
+              res && res.message ? res.message : '알 수 없는 오류'
+            }`,
+          );
+          return;
+        }
+
         setGroups(
           groups.map(g =>
             g.id === gForm.id
@@ -268,6 +355,17 @@ function AdminPage({
           name: gForm.name,
           questionCount: gForm.count,
         });
+        console.log('createGroup response:', res);
+
+        if (!res || res.status !== 'ok') {
+          alert(
+            `그룹 생성 실패\n\n서버 메시지: ${
+              res && res.message ? res.message : '알 수 없는 오류'
+            }`,
+          );
+          return;
+        }
+
         setGroups([
           ...groups,
           res.group || {
@@ -277,6 +375,7 @@ function AdminPage({
           },
         ]);
       }
+
       setGForm({ name: '', count: 10, id: null });
       alert(ALERT.SAVE_SUCCESS);
     } catch (e) {
@@ -292,10 +391,29 @@ function AdminPage({
       alert(ALERT.ADMIN_ONLY);
       return;
     }
-    if (!window.confirm('그룹을 삭제하시겠습니까?? 문제도 함께 정리해야 합니다.')) return;
+    if (!window.confirm('그룹을 삭제하시겠습니까?? 문제도 함께 정리해야 합니다.'))
+      return;
+
     try {
       showLoader?.();
-      await deleteGroup(id);
+      const res = await deleteGroup(id);
+      console.log('deleteGroup response:', res);
+
+      if (!res || res.status !== 'ok') {
+        if (res && res.code === 'GROUP_HAS_QUESTIONS') {
+          alert(
+            '이 그룹에 속한 문제가 있어 삭제할 수 없습니다.\n먼저 해당 그룹의 문제를 모두 삭제해 주세요.',
+          );
+        } else {
+          alert(
+            `그룹 삭제 실패\n\n서버 메시지: ${
+              res && res.message ? res.message : '알 수 없는 오류'
+            }`,
+          );
+        }
+        return;
+      }
+
       setGroups(groups.filter(g => g.id !== id));
       alert(ALERT.DELETE_SUCCESS);
     } catch (e) {
@@ -320,7 +438,6 @@ function AdminPage({
         const d = await fetchSubmissions();
         console.log('getSubmissions response:', d);
         if (!cancelled) {
-          // 에러 응답 방어
           if (Array.isArray(d.submissions)) {
             setSubs(d.submissions);
           } else {
@@ -343,7 +460,9 @@ function AdminPage({
     return () => {
       cancelled = true;
     };
-  }, [tab, readOnly, showLoader, hideLoader]);
+    // showLoader, hideLoader는 변경되지 않는다고 가정하고 ESLint 무시
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, readOnly]);
 
   const handleDeleteSub = async id => {
     if (readOnly) {
@@ -351,10 +470,26 @@ function AdminPage({
       return;
     }
     if (!window.confirm('기록을 삭제하시겠습니까?')) return;
+
     try {
       showLoader?.();
-      await deleteSubmission(id);
-      setSubs(subs.filter(s => s.id !== id));
+
+      const res = await deleteSubmission(id);
+      console.log('deleteSubmission response:', res);
+
+      if (!res || res.status !== 'ok') {
+        const msg = res && res.message ? res.message : '알 수 없는 오류';
+        alert(`삭제에 실패했습니다.\n\n서버 메시지: ${msg}`);
+        return;
+      }
+
+      const d = await fetchSubmissions();
+      if (Array.isArray(d.submissions)) {
+        setSubs(d.submissions);
+      } else {
+        setSubs([]);
+      }
+
       alert(ALERT.DELETE_SUCCESS);
     } catch (e) {
       console.error(e);
@@ -389,7 +524,8 @@ function AdminPage({
         {readOnly && (
           <div className="mt-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs md:text-sm px-3 py-2 rounded-xl dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-100">
             현재 계정은 <span className="font-semibold">관리자 권한이 없어</span>{' '}
-            읽기 전용으로만 볼 수 있습니다. 수정/삭제/등록은 isAdmin이 부여된 계정으로 로그인 후 이용하세요.
+            읽기 전용으로만 볼 수 있습니다. 수정/삭제/등록은 isAdmin이 부여된
+            계정으로 로그인 후 이용하세요.
           </div>
         )}
       </div>
@@ -526,7 +662,9 @@ function AdminPage({
                             setQForm({ ...qForm, options: n });
                           }}
                           disabled={readOnly}
-                          className={readOnly ? 'opacity-60 cursor-not-allowed' : ''}
+                          className={
+                            readOnly ? 'opacity-60 cursor-not-allowed' : ''
+                          }
                           placeholder={`보기 ${i + 1} (KO)`}
                         />
                       </div>
@@ -539,7 +677,9 @@ function AdminPage({
                             setQForm({ ...qForm, optionsEn: n });
                           }}
                           disabled={readOnly}
-                          className={readOnly ? 'opacity-60 cursor-not-allowed' : ''}
+                          className={
+                            readOnly ? 'opacity-60 cursor-not-allowed' : ''
+                          }
                           placeholder={`Option ${i + 1} (EN)`}
                         />
                       </div>
@@ -593,7 +733,9 @@ function AdminPage({
                         setQForm({ ...qForm, answer: e.target.value })
                       }
                       disabled={readOnly}
-                      className={readOnly ? 'opacity-60 cursor-not-allowed' : ''}
+                      className={
+                        readOnly ? 'opacity-60 cursor-not-allowed' : ''
+                      }
                     />
                   </div>
                   <div>
@@ -604,7 +746,9 @@ function AdminPage({
                         setQForm({ ...qForm, answerEn: e.target.value })
                       }
                       disabled={readOnly}
-                      className={readOnly ? 'opacity-60 cursor-not-allowed' : ''}
+                      className={
+                        readOnly ? 'opacity-60 cursor-not-allowed' : ''
+                      }
                     />
                   </div>
                 </div>
@@ -654,7 +798,11 @@ function AdminPage({
                   editingId
                     ? 'bg-amber-500 hover:bg-amber-600 text-white'
                     : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                } ${readOnly ? 'opacity-50 cursor-not-allowed hover:bg-indigo-600' : ''}`}
+                } ${
+                  readOnly
+                    ? 'opacity-50 cursor-not-allowed hover:bg-indigo-600'
+                    : ''
+                }`}
               >
                 {editingId ? '수정 저장' : '문제 등록'}
               </button>
@@ -723,7 +871,9 @@ function AdminPage({
                           : [...prev, q.id],
                       );
                     }}
-                    className={`mt-1.5 ${readOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`mt-1.5 ${
+                      readOnly ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5 mb-1">
@@ -838,7 +988,11 @@ function AdminPage({
                   gForm.id
                     ? 'bg-amber-500 hover:bg-amber-600'
                     : 'bg-indigo-600 hover:bg-indigo-700'
-                } ${readOnly ? 'opacity-50 cursor-not-allowed hover:bg-indigo-600' : ''}`}
+                } ${
+                  readOnly
+                    ? 'opacity-50 cursor-not-allowed hover:bg-indigo-600'
+                    : ''
+                }`}
               >
                 저장
               </button>
@@ -849,7 +1003,7 @@ function AdminPage({
             {groups.map(g => (
               <div
                 key={g.id}
-                className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 flex justify-between items-center"
+                className="bg_WHITE dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 flex justify-between items-center"
               >
                 <div>
                   <h4 className="font-bold text-slate-800 dark:text-white text-sm md:text-base">
@@ -897,7 +1051,6 @@ function AdminPage({
       {tab === 's' && (
         <div className="space-y-4">
           {subLoading ? (
-            // 글로벌 Loader가 떠 있으니 여기선 별 문구 X
             null
           ) : !subs.length ? (
             <p className="text-center py-10 text-slate-400 text-sm md:text-base">
@@ -907,7 +1060,7 @@ function AdminPage({
             subs.map(s => (
               <div
                 key={s.id}
-                className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700"
+                className="bg_WHITE dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700"
               >
                 <div className="flex justify-between items-start gap-3">
                   <div>
@@ -951,7 +1104,6 @@ function AdminPage({
                   </button>
                 </div>
 
-                {/* Detail Toggle */}
                 {viewSubId === s.id && s.details && (
                   <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 space-y-2">
                     {s.details.map((d, i) => (

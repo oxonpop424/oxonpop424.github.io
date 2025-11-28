@@ -1,8 +1,11 @@
-// src/api.js
 import { auth } from './firebase';
 
+// -----------------------------------------------------------------------
+// [중요] Google Apps Script 배포 후 받은 "웹 앱 URL"로 교체하세요.
+// 끝이 /exec 로 끝나야 합니다.
+// -----------------------------------------------------------------------
 export const API_BASE_URL =
-  'https://script.google.com/macros/s/AKfycbzfQkZwwtfwGAPiyofR5MP3Bar3aFcl6IUcoT5iDsTB9JDCnxXf7rQWC-4ItcR1NrRf/exec';
+  'https://script.google.com/macros/s/AKfycbxBhe5sfSHEuLeN-wHidWEGOBgqmrivi8FN0EQWmDrHGLGDfsrdSGErWEK8ddWkOhAh/exec';
 
 // ===============================
 // 공통 헬퍼
@@ -14,6 +17,7 @@ async function getIdToken() {
   if (!user) {
     throw new Error('로그인 정보가 없습니다.');
   }
+  // true 로 강제로 새 토큰 발급 (권한 갱신 반영)
   return user.getIdToken(true);
 }
 
@@ -25,24 +29,42 @@ async function fetchJson(url, options = {}) {
     return JSON.parse(text);
   } catch {
     console.error('JSON parse error, raw text:', text);
-    throw new Error('Invalid JSON response');
+    throw new Error('Invalid JSON response: ' + text);
   }
 }
 
-// 🔐 관리자 전용 POST 헬퍼 (preflight 안 나게 headers 제거)
+// 🔐 관리자 전용 POST 헬퍼
+//  - body 에 idToken 포함
+//  - URL query 에는 action만 포함 (idToken은 너무 길어서 URL에서 제외)
 async function adminPost(action, payload) {
   const idToken = await getIdToken();
   const body = { ...payload, idToken };
 
-  return fetchJson(`${API_BASE_URL}?action=${encodeURIComponent(action)}`, {
+  // [수정됨] idToken을 URL 파라미터에서 제거하고 action만 남김
+  const url = `${API_BASE_URL}?action=${encodeURIComponent(action)}`;
+
+  const res = await fetchJson(url, {
     method: 'POST',
+    // Apps Script는 POST 요청을 받으려면 redirect='follow'가 필요할 수 있음(기본값)이나
+    // text/plain 으로 보내야 CORS 프리플라이트를 피하는 경우가 많음.
+    // 여기서는 기존 방식대로 보냅니다.
     body: JSON.stringify(body),
   });
+
+  console.log(`adminPost(${action}) response:`, res);
+
+  // ⚠ 서버에서 status: 'error' 오면 에러 던지기
+  if (!res || res.status !== 'ok') {
+    // 디버깅을 위해 메시지 상세 출력
+    const msg = (res && res.message) ? res.message : '서버 오류';
+    throw new Error(msg);
+  }
+
+  return res;
 }
 
 // ===============================
 // 초기 데이터 로드 (public)
-// 백엔드에서 { questions, settings, groups } 형태로 내려온다고 가정
 // ===============================
 export async function fetchAll() {
   return fetchJson(API_BASE_URL);
@@ -51,7 +73,6 @@ export async function fetchAll() {
 // ===============================
 // 문제/설정 (관리자 전용)
 // ===============================
-
 export async function createQuestion(question) {
   return adminPost('addQuestion', question);
 }
@@ -88,9 +109,10 @@ export async function deleteGroup(id) {
 // ===============================
 export async function submitAnswers(payload) {
   try {
+    // no-cors 모드는 응답 내용을 읽을 수 없음 (성공 여부만 확인 가능)
     await fetch(`${API_BASE_URL}?action=addSubmission`, {
       method: 'POST',
-      mode: 'no-cors',
+      mode: 'no-cors', 
       headers: {
         'Content-Type': 'application/json',
       },
@@ -106,15 +128,14 @@ export async function submitAnswers(payload) {
 
 // ===============================
 // 제출된 정답 관리
-//   → 문제/그룹과 같은 방식(GET, public)으로 변경
 // ===============================
-// 문제 목록처럼: 조회는 public GET
+
+// 조회는 public GET (API_BASE_URL에 action 쿼리만 붙임)
 export async function fetchSubmissions() {
-  // questions, groups처럼 GET + action 으로만 호출
   return fetchJson(`${API_BASE_URL}?action=getSubmissions`);
 }
 
-// 문제 삭제와 동일: adminPost 사용 (idToken + isAdminRequest_)
+// 삭제는 adminPost 사용
 export async function deleteSubmission(id) {
   return adminPost('deleteSubmission', { id });
 }

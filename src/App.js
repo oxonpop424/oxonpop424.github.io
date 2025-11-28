@@ -113,7 +113,8 @@ function App() {
 
   // 🔥 Auth 상태
   const [user, setUser] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  // ✅ isAdmin 초기값을 null로 (아직 모름 상태)
+  const [isAdmin, setIsAdmin] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
   const [theme, setTheme] = useState(() =>
@@ -163,18 +164,19 @@ function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async currentUser => {
       setUser(currentUser);
-      if (currentUser) {
-        try {
+      try {
+        if (currentUser) {
           const tokenResult = await getIdTokenResult(currentUser);
           setIsAdmin(!!tokenResult.claims.isAdmin);
-        } catch (err) {
-          console.error('토큰 조회 실패', err);
+        } else {
           setIsAdmin(false);
         }
-      } else {
+      } catch (err) {
+        console.error('토큰 조회 실패', err);
         setIsAdmin(false);
+      } finally {
+        setAuthLoading(false);
       }
-      setAuthLoading(false);
     });
 
     return () => unsub();
@@ -211,7 +213,7 @@ function App() {
       ? 'justify-start min-h-[calc(100vh-56px-64px)] md:min-h-[calc(100vh-64px)]'
       : 'justify-center min-h-[calc(100vh-56px-64px)] md:min-h-[calc(100vh-64px)]');
 
-  // 네비게이션 링크 (Admin은 isAdmin일 때만 노출)
+  // 네비게이션 링크 (Admin은 isAdmin === true일 때만 노출)
   const navLinks = [
     { to: '/', label: t.gosi },
     { to: '/quiz', label: t.quiz },
@@ -263,7 +265,11 @@ function App() {
                     {user.email}
                   </span>
                   <span className="text-[10px] md:text-xs text-slate-400">
-                    {isAdmin ? 'Admin 계정' : '일반 계정'}
+                    {isAdmin === null
+                      ? '권한 확인 중...'
+                      : isAdmin
+                      ? 'Admin 계정'
+                      : '일반 계정'}
                   </span>
                 </div>
               )}
@@ -360,7 +366,6 @@ function App() {
               />
             </Routes>
           </main>
-
           {/* Footer - Made by Oksu Kwak */}
           <footer className="text-center text-[11px] md:text-xs text-slate-400 flex justify-center items-center gap-1">
             <span>{t.madeBy}</span>
