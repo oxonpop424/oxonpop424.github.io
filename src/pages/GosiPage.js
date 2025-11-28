@@ -83,10 +83,12 @@ const getExp = (q, lang) =>
 
 function GosiPage({
   questions,
-  settings, // 사용 안 해도 props 형태는 유지
+  settings,
   groups = [],
   language = 'ko',
   onProgressChange,
+  showLoader,
+  hideLoader,
 }) {
   const t = TEXT[language];
 
@@ -128,9 +130,9 @@ function GosiPage({
       });
 
     setQuizQuestions(shuffled);
-    setAnswers({});
+    setAnswers({ });
     setScore(null);
-    setResultMap({});
+    setResultMap({ });
     setStep('quiz');
   };
 
@@ -194,16 +196,24 @@ function GosiPage({
     const groupName =
       groups.find(g => String(g.id) === String(selectedGroupId))?.name || '';
 
-    await submitAnswers({
-      userName,
-      userEmail,
-      groupId: selectedGroupId,
-      groupName,
-      scoreCorrect: summary.correct,
-      scoreTotal: summary.total,
-      scoreRate: (summary.correct / summary.total) * 100,
-      details,
-    });
+    try {
+      showLoader?.();
+      await submitAnswers({
+        userName,
+        userEmail,
+        groupId: selectedGroupId,
+        groupName,
+        scoreCorrect: summary.correct,
+        scoreTotal: summary.total,
+        scoreRate: (summary.correct / summary.total) * 100,
+        details,
+      });
+    } catch (e) {
+      console.error(e);
+      alert('결과 저장 중 오류가 발생했습니다. 네트워크를 확인해주세요.');
+    } finally {
+      hideLoader?.();
+    }
   };
 
   // 고시: 전체 스크롤 진행도

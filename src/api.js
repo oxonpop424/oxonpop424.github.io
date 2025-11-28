@@ -1,6 +1,21 @@
 // src/api.js
+import { auth } from './firebase';
+
 export const API_BASE_URL =
-  'https://script.google.com/macros/s/AKfycbyGquHrUYccfzsB-RiGVYwiozB4lPOYul5FcWUzUHUwYnLUekiVIVo-j-mBd7v48Y8F/exec';
+  'https://script.google.com/macros/s/AKfycbzfQkZwwtfwGAPiyofR5MP3Bar3aFcl6IUcoT5iDsTB9JDCnxXf7rQWC-4ItcR1NrRf/exec';
+
+// ===============================
+// 공통 헬퍼
+// ===============================
+
+// 현재 로그인한 사용자의 Firebase ID 토큰 가져오기
+async function getIdToken() {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('로그인 정보가 없습니다.');
+  }
+  return user.getIdToken(true);
+}
 
 // 공통 JSON fetch 헬퍼
 async function fetchJson(url, options = {}) {
@@ -14,80 +29,74 @@ async function fetchJson(url, options = {}) {
   }
 }
 
-// 초기 데이터 로드
+// 🔐 관리자 전용 POST 헬퍼 (preflight 안 나게 headers 제거)
+async function adminPost(action, payload) {
+  const idToken = await getIdToken();
+  const body = { ...payload, idToken };
+
+  return fetchJson(`${API_BASE_URL}?action=${encodeURIComponent(action)}`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+// ===============================
+// 초기 데이터 로드 (public)
 // 백엔드에서 { questions, settings, groups } 형태로 내려온다고 가정
+// ===============================
 export async function fetchAll() {
   return fetchJson(API_BASE_URL);
 }
 
-// --------- 문제/설정 ---------
-// settings는 현재 UI에서 사용하지 않지만, 추후 확장 대비용으로 남겨둔 상태입니다.
+// ===============================
+// 문제/설정 (관리자 전용)
+// ===============================
+
 export async function createQuestion(question) {
-  return fetchJson(`${API_BASE_URL}?action=addQuestion`, {
-    method: 'POST',
-    body: JSON.stringify(question),
-  });
+  return adminPost('addQuestion', question);
 }
 
 export async function updateQuestion(question) {
-  return fetchJson(`${API_BASE_URL}?action=updateQuestion`, {
-    method: 'POST',
-    body: JSON.stringify(question),
-  });
+  return adminPost('updateQuestion', question);
 }
 
 export async function deleteQuestionById(id) {
-  return fetchJson(`${API_BASE_URL}?action=deleteQuestion`, {
-    method: 'POST',
-    body: JSON.stringify({ id }),
-  });
+  return adminPost('deleteQuestion', { id });
 }
 
-// (현재는 사용하지 않지만, 남겨 두고 싶다면 유지 / 완전히 제거해도 무방)
 export async function updateSettings(settings) {
-  return fetchJson(`${API_BASE_URL}?action=updateSettings`, {
-    method: 'POST',
-    body: JSON.stringify(settings),
-  });
+  return adminPost('updateSettings', settings);
 }
 
-// --------- 문제 은행 그룹 ---------
-// groups 시트: id, name, questionCount
+// ===============================
+// 문제 은행 그룹 (관리자 전용)
+// ===============================
 export async function createGroup(group) {
-  return fetchJson(`${API_BASE_URL}?action=addGroup`, {
-    method: 'POST',
-    body: JSON.stringify(group), // { name, questionCount }
-  });
+  return adminPost('addGroup', group);
 }
 
 export async function updateGroup(group) {
-  return fetchJson(`${API_BASE_URL}?action=updateGroup`, {
-    method: 'POST',
-    body: JSON.stringify(group), // { id, name, questionCount }
-  });
+  return adminPost('updateGroup', group);
 }
 
 export async function deleteGroup(id) {
-  return fetchJson(`${API_BASE_URL}?action=deleteGroup`, {
-    method: 'POST',
-    body: JSON.stringify({ id }),
-  });
+  return adminPost('deleteGroup', { id });
 }
 
-// --------- 고시 모드 정답 제출 ---------
-// submissions 시트에 기록 (CORS 회피용: 응답은 읽지 않고 요청만 보냄)
+// ===============================
+// 고시 모드 정답 제출 (public)
+// ===============================
 export async function submitAnswers(payload) {
   try {
     await fetch(`${API_BASE_URL}?action=addSubmission`, {
       method: 'POST',
-      mode: 'no-cors', // 👈 CORS 차단 안 나게 opaque 요청으로 보냄
+      mode: 'no-cors',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
     });
 
-    // 응답은 읽을 수 없지만, 요청은 정상 전송됨
     return { status: 'ok' };
   } catch (e) {
     console.error('정답 제출 요청 실패', e);
@@ -95,14 +104,17 @@ export async function submitAnswers(payload) {
   }
 }
 
-// --------- 제출된 정답 관리 ---------
+// ===============================
+// 제출된 정답 관리
+//   → 문제/그룹과 같은 방식(GET, public)으로 변경
+// ===============================
+// 문제 목록처럼: 조회는 public GET
 export async function fetchSubmissions() {
+  // questions, groups처럼 GET + action 으로만 호출
   return fetchJson(`${API_BASE_URL}?action=getSubmissions`);
 }
 
+// 문제 삭제와 동일: adminPost 사용 (idToken + isAdminRequest_)
 export async function deleteSubmission(id) {
-  return fetchJson(`${API_BASE_URL}?action=deleteSubmission`, {
-    method: 'POST',
-    body: JSON.stringify({ id }),
-  });
+  return adminPost('deleteSubmission', { id });
 }

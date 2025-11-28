@@ -11,6 +11,16 @@ import {
   deleteSubmission,
 } from '../api';
 
+// --- Alert 메시지 통일 ---
+const ALERT = {
+  SAVE_SUCCESS: '저장이 완료되었습니다.',
+  DELETE_SUCCESS: '삭제가 완료되었습니다.',
+  GROUP_SAVE_ERROR: '저장에 실패했습니다.',
+  GROUP_DELETE_ERROR: '삭제 실패 (문제가 포함된 그룹일 수 있습니다.)',
+  LOAD_SUB_ERROR: '제출 기록을 불러오는 중 오류가 발생했습니다.',
+  ADMIN_ONLY: '관리자만 사용할 수 있습니다.',
+};
+
 // --- UI Components ---
 const TabBtn = ({ active, onClick, children }) => (
   <button
@@ -68,8 +78,18 @@ const Card = ({ children, title, action, editing = false }) => (
   </div>
 );
 
-function AdminPage({ questions, setQuestions, groups, setGroups }) {
+// 🔥 isAdmin을 받아서 readOnly 모드 제어
+function AdminPage({
+  questions,
+  setQuestions,
+  groups,
+  setGroups,
+  isAdmin,
+  showLoader,
+  hideLoader,
+}) {
   const [tab, setTab] = useState('q'); // q(uestions), g(roups), s(tats)
+  const readOnly = !isAdmin; // true면 수정/삭제 금지
 
   // --- Questions State ---
   const [qForm, setQForm] = useState({
@@ -122,6 +142,11 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
   };
 
   const handleSaveQ = async () => {
+    if (readOnly) {
+      alert(ALERT.ADMIN_ONLY);
+      return;
+    }
+
     if (!qForm.question || !qForm.groupId) return alert('필수 항목 누락');
     if (qForm.type === 'mc' && qForm.options.filter(o => o.trim()).length < 2)
       return alert('보기 최소 2개');
@@ -133,6 +158,7 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
         groups.find(g => String(g.id) === String(qForm.groupId))?.name || '',
     };
     try {
+      showLoader?.();
       if (editingId) {
         await updateQuestion({ id: editingId, ...payload });
         setQuestions(
@@ -145,10 +171,12 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
         setQuestions([...questions, { ...payload, id: res.id }]);
       }
       resetQForm();
-      alert('저장 완료');
+      alert(ALERT.SAVE_SUCCESS);
     } catch (e) {
       console.error(e);
-      alert('에러 발생');
+      alert('에러가 발생했습니다. 다시 시도해주세요.');
+    } finally {
+      hideLoader?.();
     }
   };
 
@@ -172,23 +200,56 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
   };
 
   const handleDeleteQ = async id => {
+    if (readOnly) {
+      alert(ALERT.ADMIN_ONLY);
+      return;
+    }
     if (!window.confirm('삭제하시겠습니까?')) return;
-    await deleteQuestionById(id);
-    setQuestions(questions.filter(q => q.id !== id));
+    try {
+      showLoader?.();
+      await deleteQuestionById(id);
+      setQuestions(questions.filter(q => q.id !== id));
+      alert(ALERT.DELETE_SUCCESS);
+    } catch (e) {
+      console.error(e);
+      alert('삭제 중 오류가 발생했습니다.');
+    } finally {
+      hideLoader?.();
+    }
   };
 
   const handleBulkDelete = async () => {
+    if (readOnly) {
+      alert(ALERT.ADMIN_ONLY);
+      return;
+    }
     if (!selectedIds.length || !window.confirm(`${selectedIds.length}개 삭제?`))
       return;
-    for (const id of selectedIds) await deleteQuestionById(id);
-    setQuestions(questions.filter(q => !selectedIds.includes(q.id)));
-    setSelectedIds([]);
+    try {
+      showLoader?.();
+      for (const id of selectedIds) {
+        await deleteQuestionById(id);
+      }
+      setQuestions(questions.filter(q => !selectedIds.includes(q.id)));
+      setSelectedIds([]);
+      alert(ALERT.DELETE_SUCCESS);
+    } catch (e) {
+      console.error(e);
+      alert('삭제 중 오류가 발생했습니다.');
+    } finally {
+      hideLoader?.();
+    }
   };
 
   // === Handlers: Groups ===
   const handleSaveGroup = async () => {
+    if (readOnly) {
+      alert(ALERT.ADMIN_ONLY);
+      return;
+    }
     if (!gForm.name) return;
     try {
+      showLoader?.();
       if (gForm.id) {
         await updateGroup({
           id: gForm.id,
@@ -217,36 +278,90 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
         ]);
       }
       setGForm({ name: '', count: 10, id: null });
+      alert(ALERT.SAVE_SUCCESS);
     } catch (e) {
-      alert('그룹 저장 실패');
+      console.error(e);
+      alert(ALERT.GROUP_SAVE_ERROR);
+    } finally {
+      hideLoader?.();
     }
   };
 
   const handleDeleteGroup = async id => {
+    if (readOnly) {
+      alert(ALERT.ADMIN_ONLY);
+      return;
+    }
     if (!window.confirm('그룹을 삭제하시겠습니까?? 문제도 함께 정리해야 합니다.')) return;
     try {
+      showLoader?.();
       await deleteGroup(id);
       setGroups(groups.filter(g => g.id !== id));
+      alert(ALERT.DELETE_SUCCESS);
     } catch (e) {
-      alert('삭제 실패 (문제가 포함된 그룹일 수 있습니다.)');
+      console.error(e);
+      alert(ALERT.GROUP_DELETE_ERROR);
+    } finally {
+      hideLoader?.();
     }
   };
 
   // === Handlers: Stats ===
   useEffect(() => {
-    if (tab === 's') {
+    // 비관리자는 아예 요청 보내지 않음
+    if (tab !== 's' || readOnly) return;
+
+    let cancelled = false;
+
+    const run = async () => {
       setSubLoading(true);
-      fetchSubmissions().then(d => {
-        setSubs(d.submissions || []);
-        setSubLoading(false);
-      });
-    }
-  }, [tab]);
+      showLoader?.();
+      try {
+        const d = await fetchSubmissions();
+        console.log('getSubmissions response:', d);
+        if (!cancelled) {
+          // 에러 응답 방어
+          if (Array.isArray(d.submissions)) {
+            setSubs(d.submissions);
+          } else {
+            setSubs([]);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) {
+          alert(ALERT.LOAD_SUB_ERROR);
+        }
+      } finally {
+        if (!cancelled) setSubLoading(false);
+        hideLoader?.();
+      }
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, readOnly, showLoader, hideLoader]);
 
   const handleDeleteSub = async id => {
+    if (readOnly) {
+      alert(ALERT.ADMIN_ONLY);
+      return;
+    }
     if (!window.confirm('기록을 삭제하시겠습니까?')) return;
-    await deleteSubmission(id);
-    setSubs(subs.filter(s => s.id !== id));
+    try {
+      showLoader?.();
+      await deleteSubmission(id);
+      setSubs(subs.filter(s => s.id !== id));
+      alert(ALERT.DELETE_SUCCESS);
+    } catch (e) {
+      console.error(e);
+      alert('삭제 중 오류가 발생했습니다.');
+    } finally {
+      hideLoader?.();
+    }
   };
 
   // --- Filter & Pagination ---
@@ -263,13 +378,20 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
   return (
     <div className="max-w-5xl mx-auto pb-20 space-y-6 text-[13px] md:text-[15px]">
       {/* Page Header */}
-      <div className="pt-2">
+      <div className="pt-2 space-y-2">
         <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
           관리자 페이지
         </h1>
-        <p className="text-sm md:text-base text-slate-500 dark:text-slate-400 mt-1">
+        <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">
           문제, 그룹, 제출 기록을 한 곳에서 관리합니다.
         </p>
+
+        {readOnly && (
+          <div className="mt-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs md:text-sm px-3 py-2 rounded-xl dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-100">
+            현재 계정은 <span className="font-semibold">관리자 권한이 없어</span>{' '}
+            읽기 전용으로만 볼 수 있습니다. 수정/삭제/등록은 isAdmin이 부여된 계정으로 로그인 후 이용하세요.
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -314,7 +436,10 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                     onChange={e =>
                       setQForm({ ...qForm, groupId: e.target.value })
                     }
-                    className="w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm md:text-base dark:text-white"
+                    disabled={readOnly}
+                    className={`w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm md:text-base dark:text-white ${
+                      readOnly ? 'opacity-60 cursor-not-allowed' : ''
+                    }`}
                   >
                     <option value="">그룹 선택</option>
                     {groups.map(g => (
@@ -331,7 +456,10 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                     onChange={e =>
                       setQForm({ ...qForm, type: e.target.value })
                     }
-                    className="w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm md:text-base dark:text-white"
+                    disabled={readOnly}
+                    className={`w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl px-4 py-3 text-sm md:text-base dark:text-white ${
+                      readOnly ? 'opacity-60 cursor-not-allowed' : ''
+                    }`}
                   >
                     <option value="mc">객관식</option>
                     <option value="sa">주관식</option>
@@ -348,7 +476,10 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                     onChange={e =>
                       setQForm({ ...qForm, question: e.target.value })
                     }
-                    className="w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl p-3 text-sm md:text-base dark:text-white min-h-[150px]"
+                    disabled={readOnly}
+                    className={`w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl p-3 text-sm md:text-base dark:text-white min-h-[150px] ${
+                      readOnly ? 'opacity-60 cursor-not-allowed' : ''
+                    }`}
                   />
                 </div>
                 <div>
@@ -359,7 +490,10 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                     onChange={e =>
                       setQForm({ ...qForm, questionEn: e.target.value })
                     }
-                    className="w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl p-3 text-sm md:text-base dark:text-white min-h-[150px]"
+                    disabled={readOnly}
+                    className={`w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl p-3 text-sm md:text-base dark:text-white min-h-[150px] ${
+                      readOnly ? 'opacity-60 cursor-not-allowed' : ''
+                    }`}
                   />
                 </div>
               </div>
@@ -376,6 +510,7 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                           onChange={() =>
                             setQForm({ ...qForm, answerIndex: i })
                           }
+                          disabled={readOnly}
                           className="w-4 h-4 text-indigo-600"
                         />
                         <span className="text-sm md:text-base text-slate-500">
@@ -390,6 +525,8 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                             n[i] = e.target.value;
                             setQForm({ ...qForm, options: n });
                           }}
+                          disabled={readOnly}
+                          className={readOnly ? 'opacity-60 cursor-not-allowed' : ''}
                           placeholder={`보기 ${i + 1} (KO)`}
                         />
                       </div>
@@ -401,11 +538,14 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                             n[i] = e.target.value;
                             setQForm({ ...qForm, optionsEn: n });
                           }}
+                          disabled={readOnly}
+                          className={readOnly ? 'opacity-60 cursor-not-allowed' : ''}
                           placeholder={`Option ${i + 1} (EN)`}
                         />
                       </div>
                       <button
                         onClick={() => {
+                          if (readOnly) return;
                           setQForm({
                             ...qForm,
                             options: qForm.options.filter(
@@ -416,7 +556,10 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                             ),
                           });
                         }}
-                        className="text-sm md:text-base text-red-400 font-bold px-2 self-center"
+                        disabled={readOnly}
+                        className={`text-sm md:text-base text-red-400 font-bold px-2 self-center ${
+                          readOnly ? 'opacity-40 cursor-not-allowed' : ''
+                        }`}
                       >
                         ×
                       </button>
@@ -430,7 +573,10 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                         optionsEn: [...qForm.optionsEn, ''],
                       })
                     }
-                    className="text-sm md:text-base text-indigo-500 font-bold mt-1"
+                    disabled={readOnly}
+                    className={`text-sm md:text-base text-indigo-500 font-bold mt-1 ${
+                      readOnly ? 'opacity-40 cursor-not-allowed' : ''
+                    }`}
                   >
                     + 보기 추가
                   </button>
@@ -446,6 +592,8 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                       onChange={e =>
                         setQForm({ ...qForm, answer: e.target.value })
                       }
+                      disabled={readOnly}
+                      className={readOnly ? 'opacity-60 cursor-not-allowed' : ''}
                     />
                   </div>
                   <div>
@@ -455,6 +603,8 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                       onChange={e =>
                         setQForm({ ...qForm, answerEn: e.target.value })
                       }
+                      disabled={readOnly}
+                      className={readOnly ? 'opacity-60 cursor-not-allowed' : ''}
                     />
                   </div>
                 </div>
@@ -472,7 +622,10 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                         explanation: e.target.value,
                       })
                     }
-                    className="w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl p-3 text-sm md:text-base dark:text-white min-h-[150px]"
+                    disabled={readOnly}
+                    className={`w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl p-3 text-sm md:text-base dark:text-white min-h-[150px] ${
+                      readOnly ? 'opacity-60 cursor-not-allowed' : ''
+                    }`}
                   />
                 </div>
                 <div>
@@ -486,18 +639,22 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                         explanationEn: e.target.value,
                       })
                     }
-                    className="w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl p-3 text-sm md:text-base dark:text-white min-h-[150px]"
+                    disabled={readOnly}
+                    className={`w-full bg-slate-50 dark:bg-slate-900 border-none rounded-xl p-3 text-sm md:text-base dark:text-white min-h-[150px] ${
+                      readOnly ? 'opacity-60 cursor-not-allowed' : ''
+                    }`}
                   />
                 </div>
               </div>
 
               <button
                 onClick={handleSaveQ}
+                disabled={readOnly}
                 className={`w-full font-bold py-3 md:py-3.5 rounded-xl shadow-md text-sm md:text-base ${
                   editingId
                     ? 'bg-amber-500 hover:bg-amber-600 text-white'
                     : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                }`}
+                } ${readOnly ? 'opacity-50 cursor-not-allowed hover:bg-indigo-600' : ''}`}
               >
                 {editingId ? '수정 저장' : '문제 등록'}
               </button>
@@ -538,7 +695,10 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
               {selectedIds.length > 0 && (
                 <button
                   onClick={handleBulkDelete}
-                  className="ml-auto bg-red-50 text-red-600 px-3 py-1.5 rounded-full text-sm md:text-base font-bold border border-red-100"
+                  disabled={readOnly}
+                  className={`ml-auto bg-red-50 text-red-600 px-3 py-1.5 rounded-full text-sm md:text-base font-bold border border-red-100 ${
+                    readOnly ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
                   선택 삭제 ({selectedIds.length})
                 </button>
@@ -555,6 +715,7 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                   <input
                     type="checkbox"
                     checked={selectedIds.includes(q.id)}
+                    disabled={readOnly}
                     onChange={() => {
                       setSelectedIds(prev =>
                         prev.includes(q.id)
@@ -562,7 +723,7 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                           : [...prev, q.id],
                       );
                     }}
-                    className="mt-1.5"
+                    className={`mt-1.5 ${readOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5 mb-1">
@@ -586,7 +747,10 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                     </button>
                     <button
                       onClick={() => handleDeleteQ(q.id)}
-                      className="text-red-400 hover:text-red-600"
+                      disabled={readOnly}
+                      className={`text-red-400 hover:text-red-600 ${
+                        readOnly ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     >
                       삭제
                     </button>
@@ -651,6 +815,8 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                   onChange={e =>
                     setGForm({ ...gForm, name: e.target.value })
                   }
+                  disabled={readOnly}
+                  className={readOnly ? 'opacity-60 cursor-not-allowed' : ''}
                 />
               </div>
               <div className="w-full md:w-28">
@@ -661,15 +827,18 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                   onChange={e =>
                     setGForm({ ...gForm, count: e.target.value })
                   }
+                  disabled={readOnly}
+                  className={readOnly ? 'opacity-60 cursor-not-allowed' : ''}
                 />
               </div>
               <button
                 onClick={handleSaveGroup}
+                disabled={readOnly}
                 className={`w-full md:w-auto px-5 py-3 md:py-3.5 rounded-xl font-bold mb-[1px] shadow-md text-sm md:text-base text-white ${
                   gForm.id
                     ? 'bg-amber-500 hover:bg-amber-600'
                     : 'bg-indigo-600 hover:bg-indigo-700'
-                }`}
+                } ${readOnly ? 'opacity-50 cursor-not-allowed hover:bg-indigo-600' : ''}`}
               >
                 저장
               </button>
@@ -705,7 +874,10 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                   </button>
                   <button
                     onClick={() => handleDeleteGroup(g.id)}
-                    className="text-sm md:text-base bg-red-50 text-red-500 px-3 py-1.5 rounded-full hover:bg-red-100"
+                    disabled={readOnly}
+                    className={`text-sm md:text-base bg-red-50 text-red-500 px-3 py-1.5 rounded-full hover:bg-red-100 ${
+                      readOnly ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
                   >
                     삭제
                   </button>
@@ -725,9 +897,8 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
       {tab === 's' && (
         <div className="space-y-4">
           {subLoading ? (
-            <p className="text-center py-10 text-slate-400 text-sm md:text-base">
-              로딩 중...
-            </p>
+            // 글로벌 Loader가 떠 있으니 여기선 별 문구 X
+            null
           ) : !subs.length ? (
             <p className="text-center py-10 text-slate-400 text-sm md:text-base">
               제출 기록이 없습니다.
@@ -771,7 +942,10 @@ function AdminPage({ questions, setQuestions, groups, setGroups }) {
                   </button>
                   <button
                     onClick={() => handleDeleteSub(s.id)}
-                    className="text-sm md:text-base text-red-500 border border-red-100 bg-red-50 px-3 py-1.5 rounded-full hover:bg-red-100"
+                    disabled={readOnly}
+                    className={`text-sm md:text-base text-red-500 border border-red-100 bg-red-50 px-3 py-1.5 rounded-full hover:bg-red-100 ${
+                      readOnly ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
                   >
                     삭제
                   </button>

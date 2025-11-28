@@ -1,11 +1,22 @@
 // src/App.js
 import React, { useEffect, useState } from 'react';
-import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import {
+  Routes,
+  Route,
+  NavLink,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 import GosiPage from './pages/GosiPage';
 import QuizPage from './pages/QuizPage';
 import AdminPage from './pages/AdminPage';
+import LoginPage from './pages/LoginPage';
 import MeditLogo from './assets/logo.svg';
 import { fetchAll } from './api';
+
+import { auth } from './firebase';
+import { onAuthStateChanged, getIdTokenResult, signOut } from 'firebase/auth';
+import GlobalLoader from './components/GlobalLoader';
 
 // --- Icons ---
 const Icons = {
@@ -77,6 +88,8 @@ const UI_TEXT = {
     themeLight: '라이트',
     themeDark: '다크',
     madeBy: 'Made by',
+    login: '로그인',
+    logout: '로그아웃',
   },
   en: {
     appTitle: 'Q-Bank',
@@ -87,6 +100,8 @@ const UI_TEXT = {
     themeLight: 'Light',
     themeDark: 'Dark',
     madeBy: 'Made by',
+    login: 'Login',
+    logout: 'Logout',
   },
 };
 
@@ -95,6 +110,11 @@ function App() {
   const [settings, setSettings] = useState({});
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // 🔥 Auth 상태
+  const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const [theme, setTheme] = useState(() =>
     window.localStorage.getItem('theme') === 'dark' ? 'dark' : 'light'
@@ -107,9 +127,14 @@ function App() {
   // 진행률 상태 (0 ~ 1)
   const [progress, setProgress] = useState(0);
 
+  // 🔄 전역 로더 상태 (메시지 없음)
+  const [overlay, setOverlay] = useState(false);
+
   const location = useLocation();
+  const navigate = useNavigate();
   const isAdminPage = location.pathname.startsWith('/admin');
 
+  // 테마/언어 localStorage
   useEffect(() => {
     window.localStorage.setItem('theme', theme);
   }, [theme]);
@@ -118,6 +143,7 @@ function App() {
     window.localStorage.setItem('language', language);
   }, [language]);
 
+  // 초기 데이터 로드
   useEffect(() => {
     (async () => {
       try {
@@ -133,17 +159,50 @@ function App() {
     })();
   }, []);
 
-  const toggleTheme = () => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
-  const toggleLanguage = () => setLanguage(prev => (prev === 'ko' ? 'en' : 'ko'));
+  // 🔥 Firebase Auth 구독 + 커스텀 클레임 isAdmin 확인
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async currentUser => {
+      setUser(currentUser);
+      if (currentUser) {
+        try {
+          const tokenResult = await getIdTokenResult(currentUser);
+          setIsAdmin(!!tokenResult.claims.isAdmin);
+        } catch (err) {
+          console.error('토큰 조회 실패', err);
+          setIsAdmin(false);
+        }
+      } else {
+        setIsAdmin(false);
+      }
+      setAuthLoading(false);
+    });
 
-  if (loading)
-    return (
-      <div
-        className={`min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0f172a] text-slate-500 font-medium ${theme}`}
-      >
-        {t.loading}
-      </div>
-    );
+    return () => unsub();
+  }, []);
+
+  const toggleTheme = () =>
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  const toggleLanguage = () =>
+    setLanguage(prev => (prev === 'ko' ? 'en' : 'ko'));
+
+  const handleLoginButton = () => {
+    if (user) {
+      // 로그아웃
+      signOut(auth).catch(err => console.error(err));
+    } else {
+      // 로그인 페이지로 이동, 현재 위치를 state로 넘겨줌
+      navigate('/login', { state: { from: location.pathname } });
+    }
+  };
+
+  // 전역 로더 제어
+  const showLoader = () => {
+    setOverlay(true);
+  };
+
+  const hideLoader = () => {
+    setOverlay(false);
+  };
 
   // 레이아웃 래퍼 클래스: 관리자 페이지는 상단 정렬, 나머지는 가운데 정렬
   const contentWrapperClass =
@@ -152,44 +211,63 @@ function App() {
       ? 'justify-start min-h-[calc(100vh-56px-64px)] md:min-h-[calc(100vh-64px)]'
       : 'justify-center min-h-[calc(100vh-56px-64px)] md:min-h-[calc(100vh-64px)]');
 
+  // 네비게이션 링크 (Admin은 isAdmin일 때만 노출)
+  const navLinks = [
+    { to: '/', label: t.gosi },
+    { to: '/quiz', label: t.quiz },
+  ];
+  if (isAdmin) {
+    navLinks.push({ to: '/admin', label: t.admin });
+  }
+
   return (
     <div className={theme === 'dark' ? 'dark' : ''}>
       <div className="min-h-screen bg-[#F8FAFC] text-slate-800 dark:bg-[#0f172a] dark:text-slate-100 transition-colors duration-300 font-sans">
         {/* Header */}
         <header className="sticky top-0 z-50 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-          <div className="max-w-5xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between relative">
-            {/* 왼쪽 로고 */}
-            <div className="flex items-center gap-2 relative z-10">
-              <img src={MeditLogo} alt="Logo" className="h-5 md:h-6 w-auto" />
-              <span className="text-lg md:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">
-                {t.appTitle}
-              </span>
+          <div className="max-w-5xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between gap-4">
+            {/* 왼쪽: 로고 + 네비게이션 */}
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="flex items-center gap-2 shrink-0">
+                <img src={MeditLogo} alt="Logo" className="h-5 md:h-6 w-auto" />
+                <span className="text-lg md:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">
+                  {t.appTitle}
+                </span>
+              </div>
+
+              {/* 데스크탑 네비: 로고 바로 오른쪽 */}
+              <nav className="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-full">
+                {navLinks.map(link => (
+                  <NavLink
+                    key={link.to}
+                    to={link.to}
+                    className={({ isActive }) =>
+                      `px-5 py-1.5 rounded-full text-sm md:text-base font-medium transition-all ${
+                        isActive
+                          ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                      }`
+                    }
+                  >
+                    {link.label}
+                  </NavLink>
+                ))}
+              </nav>
             </div>
 
-            {/* 데스크탑 중앙 네비 */}
-            <nav className="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-full absolute left-1/2 -translate-x-1/2">
-              {[
-                { to: '/', label: t.gosi },
-                { to: '/quiz', label: t.quiz },
-              ].map(link => (
-                <NavLink
-                  key={link.to}
-                  to={link.to}
-                  className={({ isActive }) =>
-                    `px-5 py-1.5 rounded-full text-sm md:text-base font-medium transition-all ${
-                      isActive
-                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
-                    }`
-                  }
-                >
-                  {link.label}
-                </NavLink>
-              ))}
-            </nav>
+            {/* 오른쪽: 로그인 정보 + 언어/테마/로그인 버튼 */}
+            <div className="flex items-center gap-3 md:gap-4">
+              {user && (
+                <div className="hidden sm:flex flex-col items-end max-w-[220px]">
+                  <span className="text-xs md:text-sm font-medium text-slate-600 dark:text-slate-200 truncate">
+                    {user.email}
+                  </span>
+                  <span className="text-[10px] md:text-xs text-slate-400">
+                    {isAdmin ? 'Admin 계정' : '일반 계정'}
+                  </span>
+                </div>
+              )}
 
-            {/* 오른쪽 언어/테마 토글 */}
-            <div className="flex items-center gap-2 relative z-10">
               <button
                 onClick={toggleLanguage}
                 className="text-sm md:text-base font-bold text-slate-500 hover:text-indigo-600 px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-md"
@@ -201,6 +279,12 @@ function App() {
                 className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-500"
               >
                 {theme === 'dark' ? <Icons.Sun /> : <Icons.Moon />}
+              </button>
+              <button
+                onClick={handleLoginButton}
+                className="ml-1 text-xs md:text-sm font-semibold px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                {user ? t.logout : t.login}
               </button>
             </div>
           </div>
@@ -228,6 +312,8 @@ function App() {
                     groups={groups}
                     language={language}
                     onProgressChange={setProgress}
+                    showLoader={showLoader}
+                    hideLoader={hideLoader}
                   />
                 }
               />
@@ -243,6 +329,19 @@ function App() {
                   />
                 }
               />
+
+              {/* 로그인 페이지 */}
+              <Route
+                path="/login"
+                element={
+                  <LoginPage
+                    showLoader={showLoader}
+                    hideLoader={hideLoader}
+                  />
+                }
+              />
+
+              {/* Admin 페이지 (isAdmin 여부는 AdminPage에 prop으로 전달) */}
               <Route
                 path="/admin"
                 element={
@@ -253,6 +352,9 @@ function App() {
                     setSettings={setSettings}
                     groups={groups}
                     setGroups={setGroups}
+                    isAdmin={isAdmin}
+                    showLoader={showLoader}
+                    hideLoader={hideLoader}
                   />
                 }
               />
@@ -290,7 +392,24 @@ function App() {
             <Icons.Quiz />
             <span className="text-[11px] font-medium">{t.quiz}</span>
           </NavLink>
+
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-1 p-2 ${
+                  isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'
+                }`
+              }
+            >
+              <Icons.Admin />
+              <span className="text-[11px] font-medium">{t.admin}</span>
+            </NavLink>
+          )}
         </nav>
+
+        {/* Global Loader (메시지 없이 스피너만) */}
+        <GlobalLoader show={loading || authLoading || overlay} />
       </div>
     </div>
   );
