@@ -208,7 +208,7 @@ function App() {
 
   // 레이아웃 래퍼 클래스: 관리자 페이지는 상단 정렬, 나머지는 가운데 정렬
   const contentWrapperClass =
-    'max-w-5xl mx-auto px-4 md:px-6 py-4 md:py-8 flex flex-col ' +
+    'max-w-5xl mx-auto px-4 md:px-6 py-4 md:py-4 flex flex-col ' +
     (isAdminPage
       ? 'justify-start min-h-[calc(100vh-56px-68px)] md:min-h-[calc(100vh-68px)]'
       : 'justify-center min-h-[calc(100vh-56px-68px)] md:min-h-[calc(100vh-68px)]');
