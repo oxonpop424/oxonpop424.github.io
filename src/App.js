@@ -210,8 +210,8 @@ function App() {
   const contentWrapperClass =
     'max-w-5xl mx-auto px-4 md:px-6 py-4 md:py-8 flex flex-col ' +
     (isAdminPage
-      ? 'justify-start min-h-[calc(100vh-56px-64px)] md:min-h-[calc(100vh-64px)]'
-      : 'justify-center min-h-[calc(100vh-56px-64px)] md:min-h-[calc(100vh-64px)]');
+      ? 'justify-start min-h-[calc(100vh-56px-68px)] md:min-h-[calc(100vh-68px)]'
+      : 'justify-center min-h-[calc(100vh-56px-68px)] md:min-h-[calc(100vh-68px)]');
 
   // 네비게이션 링크 (Admin은 isAdmin === true일 때만 노출)
   const navLinks = [
