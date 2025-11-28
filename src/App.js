@@ -258,7 +258,7 @@ function App() {
             </div>
 
             {/* 오른쪽: 로그인 정보 + 언어/테마/로그인 버튼 */}
-            <div className="flex items-center gap-3 md:gap-4">
+            <div className="flex items-center gap-1 md:gap-4">
               {user && (
                 <div className="hidden sm:flex flex-col items-end max-w-[220px]">
                   <span className="text-xs md:text-sm font-medium text-slate-600 dark:text-slate-200 truncate">
@@ -288,7 +288,7 @@ function App() {
               </button>
               <button
                 onClick={handleLoginButton}
-                className="ml-1 text-xs md:text-sm font-semibold px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="ml-1 text-xs md:text-sm font-semibold px-2 md:px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 {user ? t.logout : t.login}
               </button>
